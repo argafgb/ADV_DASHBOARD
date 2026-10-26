@@ -1,9 +1,11 @@
 import { Headset, TicketCheck, Clock, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { connection } from "next/server";
 
 export const instant = false;
 
-export default function HelpdeskOverviewPage() {
+export default async function HelpdeskOverviewPage() {
+  await connection();
   return (
     <div className="w-full space-y-6 font-sans">
       <header>

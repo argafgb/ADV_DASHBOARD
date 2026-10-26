@@ -1,4 +1,5 @@
 import "server-only";
+import { connection } from "next/server";
 
 import { cache } from "react";
 import { cookies } from "next/headers";
@@ -23,6 +24,7 @@ export const getCurrentSiteFilterOptions = cache(async (): Promise<SiteOption[]>
 });
 
 export async function scopedAssetFilterInput(params: DashboardSearchParams) {
+  await connection();
   const input = assetFilterInput(params);
   const options = await getCurrentSiteFilterOptions();
   return { ...input, site: normalizeSiteSelection(input.site, options) };

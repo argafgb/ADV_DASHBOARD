@@ -1,5 +1,6 @@
 import WarehouseStockClient from "@/features/asset-maintenance/warehouse-stock/components/WarehouseStockClient";
 import { getWarehouseStockData } from "@/features/asset-maintenance/warehouse-stock/services/warehouseStockService";
+import { connection } from "next/server";
 
 export const instant = false;
 
@@ -9,6 +10,7 @@ export const metadata = {
 };
 
 export default async function WarehouseStockPage() {
+  await connection();
   const data = await getWarehouseStockData();
 
   return (
