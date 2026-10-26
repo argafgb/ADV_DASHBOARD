@@ -98,7 +98,7 @@ jobs:
             WEB_CONTAINER="${{ vars.IMAGE_NAME }}-dev"
             HEALTHY=false
             for i in $(seq 1 15); do
-              if docker exec "$WEB_CONTAINER" wget -qO- http://127.0.0.1:3000/api/auth/me >/dev/null 2>&1; then
+              if docker exec "$WEB_CONTAINER" wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
                 HEALTHY=true
                 echo "Container is up and responding."
                 break
