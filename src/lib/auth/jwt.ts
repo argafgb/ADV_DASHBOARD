@@ -1,4 +1,4 @@
-import { importPKCS8, importSPKI, jwtVerify, SignJWT } from "jose";
+import { jwtVerify, SignJWT } from "jose";
 import { isAuthRole, type AuthRole } from "@/lib/auth/dashboard-access";
 import { parseDataScope, type DataScope } from "@/lib/auth/data-scope";
 export type { AuthRole } from "@/lib/auth/dashboard-access";
@@ -29,34 +29,18 @@ type JwtPayload = {
   dataScope?: DataScope;
 };
 
-const DEFAULT_JWT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt+O2OWr46+TwvAlAHstw
-oLCtj/RyuwN5nmL7cXzz7JbgT1cqy/AnVigQcHuKQKDp5HeTvh7FOn0Nek1e/OQu
-OzFjU9WMLllSErQObqWOVa+xSyEAhMlXo/Ws5NssH0iOUSZTlMBVWzF8B84Uxogd
-TRwCjW1CJ+D3Mc/06x4qzrLw8Wq2dTXDEEY+inkDVpSU8SUVQsn0WQYQhrqMhuQe
-X7RKHXRvrLtk2vNcg3lCrv+iBFfl6jHycU8Rn7HTxVcPYOsxe/fJF02LUyOEaHZg
-00eXXn7jFFSnvBiYOR2ITYgnT5xxKOMcssfINTAQA6Edrgf6h+mm+szctyOuSQvS
-BQIDAQAB
------END PUBLIC KEY-----`;
+const DEFAULT_JWT_SECRET = "wisecon_unified_dashboard_secret_key_2026_secured";
 
-function getPublicKeyPem(): string {
-  const key = process.env.JWT_PUBLIC_KEY?.trim() || DEFAULT_JWT_PUBLIC_KEY;
-  return key.replace(/\\n/g, "\n");
-}
-
-function getPrivateKeyPem(): string {
-  const key = process.env.JWT_PRIVATE_KEY?.trim();
-  if (!key) {
-    throw new Error("JWT_PRIVATE_KEY wajib diisi di .env");
-  }
-  return key.replace(/\\n/g, "\n");
+function getSecretKey(): Uint8Array {
+  const secret = process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+  return new TextEncoder().encode(secret);
 }
 
 export async function signAuthToken(
   user: AuthUser,
   opts?: { expiresAt?: number | string },
 ): Promise<string> {
-  const privateKey = await importPKCS8(getPrivateKeyPem(), "RS256");
+  const secretKey = getSecretKey();
 
   const builder = new SignJWT({
     id: user.id,
@@ -72,7 +56,7 @@ export async function signAuthToken(
       : {}),
     ...(user.permissions ? { permissions: user.permissions } : {}),
   } satisfies JwtPayload)
-    .setProtectedHeader({ alg: "RS256" })
+    .setProtectedHeader({ alg: "HS256" })
     .setSubject(user.id)
     .setIssuedAt();
 
@@ -82,16 +66,16 @@ export async function signAuthToken(
     builder.setExpirationTime("8h");
   }
 
-  return builder.sign(privateKey);
+  return builder.sign(secretKey);
 }
 
 export async function verifyAuthToken(
   token: string,
 ): Promise<AuthUser | null> {
   try {
-    const publicKey = await importSPKI(getPublicKeyPem(), "RS256");
-    const { payload } = await jwtVerify(token, publicKey, {
-      algorithms: ["RS256"],
+    const secretKey = getSecretKey();
+    const { payload } = await jwtVerify(token, secretKey, {
+      algorithms: ["HS256"],
     });
 
     if (
