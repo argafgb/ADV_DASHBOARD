@@ -1,0 +1,17 @@
+.git
+.gitignore
+.next
+.deploy
+.gitea
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.env*
+!.env.example
+README.md
+DEPLOYMENT.md
+TODO.md
+.vscode
+.idea
