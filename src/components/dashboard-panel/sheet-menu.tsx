@@ -73,7 +73,7 @@ export function SheetMenu({ onOpenDashModal }: SheetMenuProps) {
                 alt={DASHBOARD_CONFIG.brandName}
                 width={92}
                 height={28}
-                className="h-auto max-h-7 w-23 max-w-full shrink-0 object-contain"
+                className="h-7 w-auto max-w-full shrink-0 object-contain"
                 priority
               />
 

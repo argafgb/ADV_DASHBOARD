@@ -68,7 +68,7 @@ export function Sidebar({ onOpenDashModal }: SidebarProps) {
                 alt={DASHBOARD_CONFIG.brandName}
                 width={92}
                 height={28}
-                className="h-auto max-h-7 w-23 max-w-full shrink-0 object-contain transition-all duration-300"
+                className="h-7 w-auto max-w-full shrink-0 object-contain"
                 priority
               />
             ) : (

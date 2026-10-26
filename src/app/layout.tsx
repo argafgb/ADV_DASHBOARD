@@ -12,7 +12,14 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Advantage SCM Dashboard",
   description: "Unified Operations Dashboard - PT Advantage SCM",
-  icons: { icon: "/adv-icon.webp", apple: "/adv-icon.webp" },
+  icons: {
+    icon: [
+      { url: "/adv-icon.webp", type: "image/webp" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: "/adv-icon.webp",
+    apple: "/adv-icon.webp",
+  },
 };
 
 export default function RootLayout({
