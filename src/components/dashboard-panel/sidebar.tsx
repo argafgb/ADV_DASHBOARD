@@ -1,9 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutGrid, ChevronRight, Monitor, Headset } from "lucide-react";
+import { LayoutGrid, ChevronRight } from "lucide-react";
 import { Menu } from "@/components/dashboard-panel/menu";
 import { SidebarToggle } from "@/components/dashboard-panel/sidebar-toggle";
 import { Button } from "@/components/ui/button";
@@ -24,9 +22,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onOpenDashModal }: SidebarProps) {
-  const pathname = usePathname();
-  // Rendered unconditionally so the (fully static) nav list ships in the server
-  // HTML instead of popping in once localStorage has been read.
   const hydrated = useSidebarHydrated();
   const isOpen = useSidebar((s) => s.isOpen);
   const isHover = useSidebar((s) => s.isHover);
@@ -54,7 +49,7 @@ export function Sidebar({ onOpenDashModal }: SidebarProps) {
         {/* Brand Header */}
         <Button
           className={cn(
-            "transition-all duration-300 mb-1 flex items-center w-full",
+            "transition-all duration-300 mb-2 flex items-center w-full",
             !isSidebarOpen ? "justify-center px-0" : "justify-start gap-2",
           )}
           variant="ghost"
@@ -66,92 +61,29 @@ export function Sidebar({ onOpenDashModal }: SidebarProps) {
             aria-label="Buka IT Dashboard Hub"
             className="flex items-center"
           >
-            <Image
-              src="/adv-logo-v2.webp"
-              unoptimized
-              alt={DASHBOARD_CONFIG.brandName}
-              width={92}
-              height={28}
-              className={cn(
-                "h-auto max-h-7 max-w-full shrink-0 object-contain transition-[width] duration-300",
-                isSidebarOpen ? "w-23" : "w-10",
-              )}
-              priority
-            />
+            {isSidebarOpen ? (
+              <Image
+                src="/adv-banner.webp"
+                unoptimized
+                alt={DASHBOARD_CONFIG.brandName}
+                width={92}
+                height={28}
+                className="h-auto max-h-7 w-23 max-w-full shrink-0 object-contain transition-all duration-300"
+                priority
+              />
+            ) : (
+              <Image
+                src="/adv-icon.webp"
+                unoptimized
+                alt={DASHBOARD_CONFIG.brandName}
+                width={28}
+                height={28}
+                className="h-7 w-7 shrink-0 object-contain transition-all duration-300"
+                priority
+              />
+            )}
           </a>
         </Button>
-
-        {/* Module Switcher */}
-        {isSidebarOpen ? (
-          <div className="my-2 px-1">
-            <div className="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-2 mb-1">
-              Modul
-            </div>
-            <div className="grid grid-cols-2 gap-1 p-1 bg-zinc-200/70 dark:bg-zinc-800/80 rounded-lg text-xs font-medium">
-              <Link
-                href="/dashboard/asset-maintenance"
-                className={cn(
-                  "flex items-center justify-center gap-1.5 py-1.5 rounded-md transition-all",
-                  pathname.startsWith("/dashboard/asset-maintenance")
-                    ? "bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs font-semibold"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                )}
-              >
-                <Monitor size={14} />
-                Asset IT
-              </Link>
-              <Link
-                href="/dashboard/helpdesk"
-                className={cn(
-                  "flex items-center justify-center gap-1.5 py-1.5 rounded-md transition-all",
-                  pathname.startsWith("/dashboard/helpdesk")
-                    ? "bg-white dark:bg-zinc-900 text-emerald-600 dark:text-emerald-400 shadow-xs font-semibold"
-                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                )}
-              >
-                <Headset size={14} />
-                Helpdesk
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="my-2 flex flex-col items-center gap-1">
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <Link
-                    href="/dashboard/asset-maintenance"
-                    className={cn(
-                      "p-2 rounded-lg transition-colors",
-                      pathname.startsWith("/dashboard/asset-maintenance")
-                        ? "bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400"
-                        : "text-zinc-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-800"
-                    )}
-                  >
-                    <Monitor size={18} />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">Asset IT Maintenance</TooltipContent>
-              </Tooltip>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <Link
-                    href="/dashboard/helpdesk"
-                    className={cn(
-                      "p-2 rounded-lg transition-colors",
-                      pathname.startsWith("/dashboard/helpdesk")
-                        ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400"
-                        : "text-zinc-500 hover:bg-zinc-200/60 dark:hover:bg-zinc-800"
-                    )}
-                  >
-                    <Headset size={18} />
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right">Helpdesk Tickets</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        )}
 
         {/* Scrollable Navigation Area */}
         <div className="flex-1 overflow-hidden flex flex-col w-full">
@@ -194,30 +126,25 @@ export function Sidebar({ onOpenDashModal }: SidebarProps) {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center w-full">
-              <TooltipProvider disableHoverableContent>
+            <div className="mt-4 flex w-full flex-col items-center gap-2 pt-2">
+              <TooltipProvider>
                 <Tooltip delayDuration={100}>
                   <TooltipTrigger asChild>
-                    <Button
+                    <button
                       type="button"
                       onClick={onOpenDashModal}
-                      variant="outline"
-                      className="mt-4 h-10 w-full justify-center text-zinc-700 dark:text-zinc-400"
+                      aria-label="Browse Dashboards"
+                      className="flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 transition-colors hover:bg-zinc-100 dark:border-zinc-800/60 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
                     >
                       <LayoutGrid size={18} />
-                    </Button>
+                    </button>
                   </TooltipTrigger>
-
-                  <TooltipContent side="right">
-                    Browse Dashboards
-                  </TooltipContent>
+                  <TooltipContent side="right">Browse Dashboards</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
 
-              <div className="my-2.5 w-full border-t border-zinc-200 dark:border-zinc-800/60" />
-              <div className="flex justify-center w-full">
-                <UserNav isOpen={false} />
-              </div>
+              <div className="my-1 w-8 border-t border-zinc-200 dark:border-zinc-800/60" />
+              <UserNav isOpen={false} />
             </div>
           )}
         </div>

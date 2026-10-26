@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { DASHBOARD_CONFIG } from "@/lib/dashboard-config";
@@ -98,7 +99,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "headset",
     color: "#0284C7",
     status: "active",
-    href: "http://103.76.204.104:5703/",
+    href: "/dashboard/helpdesk",
   },
   {
     id: "asset-pm",
@@ -106,7 +107,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "laptop",
     color: "#D97706",
     status: "active",
-    href: "http://103.76.204.104:5704/",
+    href: "/dashboard/asset-maintenance",
   },
   {
     id: "pic-monitoring",
@@ -211,6 +212,7 @@ export default function BrowseDashboardModal({
   onClose: () => void;
 }) {
   const mounted = useMounted();
+  const pathname = usePathname();
   const [search, setSearch] = useState("");
   const [authData, setAuthData] = useState<{
     user?: {
@@ -380,15 +382,19 @@ export default function BrowseDashboardModal({
           <div className="flex flex-col gap-1.5">
             {filteredItems.map((it) => {
               const isAccessMgmt = it.id === "access-management";
+              const isHelpdeskCurrent = it.id === "helpdesk" && pathname.startsWith("/dashboard/helpdesk");
+              const isAssetPmCurrent = it.id === "asset-pm" && pathname.startsWith("/dashboard/asset-maintenance");
               const isCurrent = isAccessMgmt
                 ? isAccessPage
-                : !isAccessPage &&
-                  (it.name === DASHBOARD_CONFIG.catalogName ||
-                    Boolean(
-                      it.href &&
-                      currentPort &&
-                      it.href.includes(`:${currentPort}/`),
-                    ));
+                : isHelpdeskCurrent ||
+                  isAssetPmCurrent ||
+                  (!isAccessPage &&
+                    (it.name === DASHBOARD_CONFIG.catalogName ||
+                      Boolean(
+                        it.href &&
+                          currentPort &&
+                          it.href.includes(`:${currentPort}/`),
+                      )));
               const isActive = it.status === "active" && !isCurrent;
 
               return (

@@ -68,7 +68,7 @@ export function SheetMenu({ onOpenDashModal }: SheetMenuProps) {
               className="flex min-w-0 items-center"
             >
               <Image
-                src="/adv-logo-v2.webp"
+                src="/adv-banner.webp"
                 unoptimized
                 alt={DASHBOARD_CONFIG.brandName}
                 width={92}

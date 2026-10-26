@@ -77,7 +77,7 @@ function LoginForm() {
       <section className="relative flex min-h-screen flex-col px-8 py-10 sm:px-14 lg:px-20 justify-between">
         <div className="flex items-center gap-3">
           <Image
-            src="/adv-icon-v2.webp"
+            src="/adv-icon.webp"
             alt="ADV"
             width={40}
             height={40}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { SheetMenu } from "@/components/dashboard-panel/sheet-menu";
 import { maxMonthForYear } from "@/lib/period-filter";
-import { DASHBOARD_CONFIG, YEAR_OPTIONS } from "@/lib/dashboard-config";
+import { YEAR_OPTIONS } from "@/lib/dashboard-config";
 import { useFilters, type SiteFilterValue } from "@/context/FilterContext";
 import {
   COMPANY_OPTIONS,
