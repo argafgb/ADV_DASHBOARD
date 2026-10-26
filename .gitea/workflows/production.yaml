@@ -1,0 +1,172 @@
+name: Production Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Variables (di Gitea -> Repository -> Settings -> Variables)
+# - IMAGE_NAME              : e.g. adv-dashboard
+# - DEPLOY_INFRA_DIR        : e.g. /opt/infra (optional, default: /opt/infra)
+# - PROD_WEB_DOMAIN         : e.g. dashboard.advantagescm.com
+
+# Global Secrets (Org Level)
+# - REGISTRY_URL, REGISTRY_USERNAME, REGISTRY_PASSWORD
+# - DEPLOY_HOSTNAME, DEPLOY_PORT, DEPLOY_USERNAME, DEPLOY_SSH_KEY
+
+# Repo Secrets (di Gitea -> Repository -> Settings -> Secrets)
+# - PROD_PG_DATABASE_URL    : postgresql://user:pass@host:5432/dbname
+# - PROD_MSSQL_DATABASE_URL : mssql://user:pass@host:1433/db
+# - PROD_JWT_SECRET         : random secret string
+# - PROD_REVALIDATE_SECRET  : webhook secret
+
+jobs:
+  build_and_deploy:
+    runs-on: product-host
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build & Push Docker Image
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login "${{ secrets.REGISTRY_URL }}" \
+            -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+          docker build \
+            -t ${{ secrets.REGISTRY_URL }}/${{ vars.IMAGE_NAME }}:prod-${{ gitea.sha }} \
+            -t ${{ secrets.REGISTRY_URL }}/${{ vars.IMAGE_NAME }}:prod-latest \
+            .
+          docker push ${{ secrets.REGISTRY_URL }}/${{ vars.IMAGE_NAME }}:prod-${{ gitea.sha }}
+          docker push ${{ secrets.REGISTRY_URL }}/${{ vars.IMAGE_NAME }}:prod-latest
+
+      - name: Copy deploy files
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.DEPLOY_HOSTNAME }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: ".deploy/compose.yaml"
+          target: "${{ vars.DEPLOY_INFRA_DIR || '/opt/infra' }}/deployments/${{ vars.IMAGE_NAME }}-prod/"
+          strip_components: 1
+
+      - name: Deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOSTNAME }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+
+            INFRA_DIR="${{ vars.DEPLOY_INFRA_DIR || '/opt/infra' }}"
+            DEPLOY_DIR=$INFRA_DIR/deployments/${{ vars.IMAGE_NAME }}-prod
+
+            # Persist deploy env file (chmod 640) — reused by rollback script
+            ENV_FILE="$DEPLOY_DIR/.env"
+            touch "$ENV_FILE"
+            chmod 640 "$ENV_FILE"
+            cat > "$ENV_FILE" <<'ENVEOF'
+            STAGE=prod
+            IMAGE_NAME=${{ vars.IMAGE_NAME }}
+            IMAGE_TAG=prod-latest
+            REGISTRY_URL=${{ secrets.REGISTRY_URL }}
+            PG_DATABASE_URL=${{ secrets.PROD_PG_DATABASE_URL || secrets.PROD_DATABASE_URL }}
+            MSSQL_DATABASE_URL=${{ secrets.PROD_MSSQL_DATABASE_URL }}
+            JWT_SECRET=${{ secrets.PROD_JWT_SECRET }}
+            REVALIDATE_SECRET=${{ secrets.PROD_REVALIDATE_SECRET }}
+            WEB_DOMAIN=${{ vars.PROD_WEB_DOMAIN || format('{0}.product.adv.my.id', vars.IMAGE_NAME) }}
+            ENVEOF
+
+            echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login "${{ secrets.REGISTRY_URL }}" \
+              -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+
+            docker compose \
+              -f "$DEPLOY_DIR/compose.yaml" \
+              -p ${{ vars.IMAGE_NAME }}-prod \
+              --env-file "$ENV_FILE" \
+              pull
+
+            docker compose \
+              -f "$DEPLOY_DIR/compose.yaml" \
+              -p ${{ vars.IMAGE_NAME }}-prod \
+              --env-file "$ENV_FILE" \
+              up -d --remove-orphans
+
+            # Verify container health
+            echo "Verifying container health..."
+            WEB_CONTAINER="${{ vars.IMAGE_NAME }}-prod"
+            HEALTHY=false
+            for i in $(seq 1 15); do
+              if docker exec "$WEB_CONTAINER" wget -qO- http://127.0.0.1:3000/api/auth/me >/dev/null 2>&1; then
+                HEALTHY=true
+                echo "Container is up and responding."
+                break
+              fi
+              if ! docker ps -q --no-trunc | grep -q "$(docker inspect -f '{{.Id}}' "$WEB_CONTAINER" 2>/dev/null)"; then
+                echo "ERROR: Web container exited prematurely!" >&2
+                docker logs --tail 50 "$WEB_CONTAINER" >&2
+                exit 1
+              fi
+              echo "Waiting for web container to respond... (attempt $i/15)"
+              sleep 2
+            done
+
+            if [ "$HEALTHY" != "true" ]; then
+              echo "ERROR: Web container healthcheck timed out." >&2
+              docker logs --tail 50 "$WEB_CONTAINER" >&2
+              exit 1
+            fi
+
+            WEB_DOMAIN="${{ vars.PROD_WEB_DOMAIN || format('{0}.product.adv.my.id', vars.IMAGE_NAME) }}"
+
+            # Update deployment manifest
+            STATE_FILE=$INFRA_DIR/apps.state
+            APP_KEY="${{ vars.IMAGE_NAME }}-prod"
+            touch "$STATE_FILE"
+            grep -v "^${APP_KEY}|" "$STATE_FILE" > "${STATE_FILE}.tmp" || true
+            echo "${APP_KEY}|$WEB_DOMAIN|${IMAGE_TAG:-prod-latest}|$(date -u +%FT%TZ)" >> "${STATE_FILE}.tmp"
+            mv "${STATE_FILE}.tmp" "$STATE_FILE"
+
+            # Safely generate and promote Caddy snippet with concurrency lock & collision check:
+            (
+              flock -w 60 200 || { echo "Timed out waiting for Caddy deploy lock." >&2; exit 1; }
+
+              CADDY_SNIPPET=$INFRA_DIR/caddy-conf.d/${{ vars.IMAGE_NAME }}-prod.caddy
+              CADDY_BACKUP="${CADDY_SNIPPET}.bak"
+              TMP_CONF=$(mktemp)
+
+              cat > "$TMP_CONF" <<CONFEOF
+            $WEB_DOMAIN {
+                encode zstd gzip
+                reverse_proxy ${{ vars.IMAGE_NAME }}-prod:3000
+            }
+            CONFEOF
+
+              # Domain collision check
+              DOMAINS=$(grep -E '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' "$TMP_CONF" | awk '{print $1}' | tr -d '{')
+              for DOMAIN in $DOMAINS; do
+                MATCH=$(grep -rnw $INFRA_DIR/caddy-conf.d/ -e "$DOMAIN" 2>/dev/null | grep -v "${{ vars.IMAGE_NAME }}-prod.caddy" || true)
+                if [ -n "$MATCH" ]; then
+                  echo "Domain collision detected: $DOMAIN is already configured in another snippet:" >&2
+                  echo "$MATCH" >&2
+                  rm -f "$TMP_CONF"
+                  exit 1
+                fi
+              done
+
+              [ -f "$CADDY_SNIPPET" ] && cp "$CADDY_SNIPPET" "$CADDY_BACKUP"
+              mv "$TMP_CONF" "$CADDY_SNIPPET"
+              chmod 640 "$CADDY_SNIPPET"
+
+              if docker exec caddy_proxy caddy validate --config /etc/caddy/Caddyfile; then
+                docker exec caddy_proxy caddy reload --config /etc/caddy/Caddyfile
+                rm -f "$CADDY_BACKUP"
+              else
+                [ -f "$CADDY_BACKUP" ] && mv "$CADDY_BACKUP" "$CADDY_SNIPPET" || rm -f "$CADDY_SNIPPET"
+                echo "Caddy config validation failed — previous route restored." >&2
+                exit 1
+              fi
+            ) 200>/tmp/caddy-deploy.lock
+
+            docker image prune -f
