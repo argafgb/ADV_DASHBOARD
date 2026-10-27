@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 # Variables (di Gitea -> Repository -> Settings -> Variables)
-# - IMAGE_NAME              : e.g. adv-dashboard
+# - IMAGE_NAME              : e.g. advdashboard
 # - DEPLOY_INFRA_DIR        : e.g. /opt/infra (optional, default: /opt/infra)
 # - PROD_WEB_DOMAIN         : e.g. dashboard.advantagescm.com
 
@@ -17,8 +17,8 @@ on:
 # Repo Secrets (di Gitea -> Repository -> Settings -> Secrets)
 # - PROD_PG_DATABASE_URL    : postgresql://user:pass@host:5432/dbname
 # - PROD_MSSQL_DATABASE_URL : mssql://user:pass@host:1433/db
-# - PROD_JWT_SECRET         : random secret string
-# - PROD_REVALIDATE_SECRET  : webhook secret
+# - PROD_JWT_SECRET_KEY         : random secret string
+# - PROD_REVALIDATE_SECRET_KEY  : webhook secret
 
 jobs:
   build_and_deploy:
@@ -73,8 +73,8 @@ jobs:
             REGISTRY_URL=${{ secrets.REGISTRY_URL }}
             PG_DATABASE_URL=${{ secrets.PROD_PG_DATABASE_URL || secrets.PROD_DATABASE_URL }}
             MSSQL_DATABASE_URL=${{ secrets.PROD_MSSQL_DATABASE_URL }}
-            JWT_SECRET=${{ secrets.PROD_JWT_SECRET }}
-            REVALIDATE_SECRET=${{ secrets.PROD_REVALIDATE_SECRET }}
+            JWT_SECRET=${{ secrets.PROD_JWT_SECRET_KEY }}
+            REVALIDATE_SECRET=${{ secrets.PROD_REVALIDATE_SECRET_KEY }}
             WEB_DOMAIN=${{ vars.PROD_WEB_DOMAIN || format('{0}.product.adv.my.id', vars.IMAGE_NAME) }}
             ENVEOF
 

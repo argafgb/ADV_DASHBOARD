@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 # Variables (di Gitea -> Repository -> Settings -> Variables)
-# - IMAGE_NAME              : e.g. adv-dashboard
+# - IMAGE_NAME              : e.g. advdashboard
 # - DEPLOY_INFRA_DIR        : e.g. /opt/infra (optional, default: /opt/infra)
-# - DEV_WEB_DOMAIN          : e.g. adv-dashboard-dev.product.adv.my.id (default: {IMAGE_NAME}-dev.product.adv.my.id)
+# - DEV_WEB_DOMAIN          : e.g. dashboard-dev.advantagescm.com (default: {IMAGE_NAME}-dev.product.adv.my.id)
 
 # Global Secrets (Org Level)
 # - REGISTRY_URL, REGISTRY_USERNAME, REGISTRY_PASSWORD
@@ -17,8 +17,8 @@ on:
 # Repo Secrets (di Gitea -> Repository -> Settings -> Secrets)
 # - DEV_PG_DATABASE_URL     : postgresql://user:pass@host:5432/dbname
 # - DEV_MSSQL_DATABASE_URL  : mssql://user:pass@host:1433/db
-# - DEV_JWT_SECRET          : random secret string
-# - DEV_REVALIDATE_SECRET   : webhook secret
+# - DEV_JWT_SECRET_KEY          : random secret string
+# - DEV_REVALIDATE_SECRET_KEY   : webhook secret
 
 jobs:
   build_and_deploy:
@@ -73,8 +73,8 @@ jobs:
             REGISTRY_URL=${{ secrets.REGISTRY_URL }}
             PG_DATABASE_URL=${{ secrets.DEV_PG_DATABASE_URL || secrets.DEV_DATABASE_URL }}
             MSSQL_DATABASE_URL=${{ secrets.DEV_MSSQL_DATABASE_URL }}
-            JWT_SECRET=${{ secrets.DEV_JWT_SECRET }}
-            REVALIDATE_SECRET=${{ secrets.DEV_REVALIDATE_SECRET }}
+            JWT_SECRET=${{ secrets.DEV_JWT_SECRET_KEY }}
+            REVALIDATE_SECRET=${{ secrets.DEV_REVALIDATE_SECRET_KEY }}
             WEB_DOMAIN=${{ vars.DEV_WEB_DOMAIN || format('{0}-dev.product.adv.my.id', vars.IMAGE_NAME) }}
             ENVEOF
 
