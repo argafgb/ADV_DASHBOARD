@@ -14,11 +14,11 @@ export const DASHBOARD_CONFIG = {
   hubUrl:
     process.env.NEXT_PUBLIC_DASHBOARD_HUB_URL || "http://103.76.204.104:5777/",
   /** Nama dashboard ini, tampil di bawah brand. Ikut katalog Browse Dashboards. */
-  subtitle: "Asset IT & PM Dashboard",
+  subtitle: "IT & DCT Helpdesk Dashboard",
   /** Judul header saat menu aktif tidak punya label. */
-  pageTitleFallback: "Asset IT & PM Dashboard",
+  pageTitleFallback: "Helpdesk & Ticketing",
   /** Nama entri dashboard ini di dalam katalog Browse Dashboards. */
-  catalogName: "Asset IT & PM Dashboard",
+  catalogName: "IT & DCT Helpdesk Dashboard",
   /**
    * Opsi filter tahun. Satu-satunya tempat yang perlu disunting saat
    * tahun berganti; elemen pertama dipakai sebagai default.

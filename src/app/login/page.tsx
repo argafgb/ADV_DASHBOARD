@@ -15,7 +15,7 @@ type LoginState = {
 function LoginForm() {
   const searchParams = useSearchParams();
   const rawReturnTo = searchParams.get("returnTo");
-  const returnTo = rawReturnTo ? safeReturnTo(rawReturnTo) : "/dashboard/asset-maintenance";
+  const returnTo = rawReturnTo ? safeReturnTo(rawReturnTo) : "/dashboard/helpdesk";
 
   const [form, setForm] = useState<LoginState>({
     identifier: "",

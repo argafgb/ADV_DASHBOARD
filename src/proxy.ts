@@ -16,7 +16,7 @@ export async function proxy(request: NextRequest) {
   if (isSkipAuth) {
     if (isLoginPage) {
       return NextResponse.redirect(
-        new URL("/dashboard/asset-maintenance", request.url),
+        new URL("/dashboard/helpdesk", request.url),
       );
     }
     return NextResponse.next();
@@ -64,7 +64,7 @@ export async function proxy(request: NextRequest) {
     const returnToParam = request.nextUrl.searchParams.get("returnTo");
     const targetUrl = returnToParam
       ? safeReturnTo(returnToParam)
-      : "/dashboard/asset-maintenance";
+      : "/dashboard/helpdesk";
     return NextResponse.redirect(new URL(targetUrl, request.url));
   }
 
