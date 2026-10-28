@@ -12,7 +12,7 @@ on:
 
 # Global Secrets (Org Level)
 # - REGISTRY_URL, REGISTRY_USERNAME, REGISTRY_PASSWORD
-# - DEPLOY_HOSTNAME, DEPLOY_PORT, DEPLOY_USERNAME, DEPLOY_SSH_KEY
+# - PROD_DEPLOY_HOSTNAME, PROD_DEPLOY_PORT, PROD_DEPLOY_USERNAME, PROD_DEPLOY_SSH_KEY
 
 # Repo Secrets (di Gitea -> Repository -> Settings -> Secrets)
 # - PROD_PG_DATABASE_URL    : postgresql://user:pass@host:5432/dbname
@@ -40,10 +40,10 @@ jobs:
       - name: Copy deploy files
         uses: appleboy/scp-action@v1.0.0
         with:
-          host: ${{ secrets.DEPLOY_HOSTNAME }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          username: ${{ secrets.DEPLOY_USERNAME }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ secrets.PROD_DEPLOY_HOSTNAME }}
+          port: ${{ secrets.PROD_DEPLOY_PORT || 22 }}
+          username: ${{ secrets.PROD_DEPLOY_USERNAME }}
+          key: ${{ secrets.PROD_DEPLOY_SSH_KEY }}
           source: ".deploy/compose.yaml"
           target: "${{ vars.DEPLOY_INFRA_DIR || '/opt/infra' }}/deployments/${{ vars.IMAGE_NAME }}-prod/"
           strip_components: 1
@@ -51,10 +51,10 @@ jobs:
       - name: Deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.DEPLOY_HOSTNAME }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          username: ${{ secrets.DEPLOY_USERNAME }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ secrets.PROD_DEPLOY_HOSTNAME }}
+          port: ${{ secrets.PROD_DEPLOY_PORT || 22 }}
+          username: ${{ secrets.PROD_DEPLOY_USERNAME }}
+          key: ${{ secrets.PROD_DEPLOY_SSH_KEY }}
           command_timeout: 10m
           script: |
             set -euo pipefail
