@@ -1,4 +1,9 @@
-import { assetMaintenanceMenuList, helpdeskMenuList, type Menu } from "./menu-list";
+import {
+  assetMaintenanceMenuList,
+  helpdeskMenuList,
+  accessMenuList,
+  type Menu,
+} from "./menu-list";
 
 export interface DashboardRegistryItem {
   id: string;
@@ -24,12 +29,21 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return helpdeskMenuList;
     },
   },
+  "access-management": {
+    id: "access-management",
+    prefix: "/dashboard/access",
+    title: "Access Management Dashboard",
+    get menuList() {
+      return accessMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
   if (pathname.startsWith("/dashboard/helpdesk")) return DASHBOARD_REGISTRY["helpdesk"];
   if (pathname.startsWith("/dashboard/asset-maintenance")) return DASHBOARD_REGISTRY["asset-maintenance"];
-  if (pathname === "/dashboard") return DASHBOARD_REGISTRY["asset-maintenance"];
+  if (pathname.startsWith("/dashboard/access")) return DASHBOARD_REGISTRY["access-management"];
+  if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }
 

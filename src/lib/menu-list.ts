@@ -12,6 +12,9 @@ import {
   AlertTriangle,
   Trophy,
   BookOpen,
+  Users,
+  Shield,
+  History,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -132,6 +135,30 @@ export const helpdeskMenuList: Menu[] = [
     href: "/dashboard/helpdesk/fsd-blueprint",
     label: "FSD Blueprint",
     icon: BookOpen,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+export const accessMenuList: Menu[] = [
+  {
+    href: "/dashboard/access/users",
+    label: "User Access",
+    icon: Users,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/access/roles",
+    label: "Roles & Permissions",
+    icon: Shield,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/access/audit",
+    label: "Audit Log",
+    icon: History,
     submenus: [],
     allowedRoles: ["management", "internal"],
   },
