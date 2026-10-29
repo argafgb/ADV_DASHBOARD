@@ -12,6 +12,11 @@ export type AuthUser = {
   allowedDashboards?: string[];
   permissions?: string[];
   dataScope?: DataScope;
+  roleKey?: string;
+  roleName?: string;
+  allowedMenus?: string[];
+  accessVersion?: number;
+  accessSource?: "db" | "legacy";
 };
 
 export type LoginRequest = {
