@@ -7,7 +7,7 @@ Dokumentasi komprehensif rencana migrasi, standardisasi arsitektur Next.js 16 Mo
 ## 1. Migrasi Penuh Modul IT & DCT Helpdesk (Primary & Default Dashboard)
 - **Kategori**: Feature Migration / Fullstack
 - **Prioritas**: High
-- **Status**: Ready for Implementation (Default Module)
+- **Status**: Completed
 - **Latar Belakang**:
   Modul IT & DCT Helpdesk saat ini masih berjalan di repository terpisah (`WISECON_DASHBOARD.HELPDESK`). Modul ini ditetapkan sebagai dashboard default aplikasi pada rute `/dashboard/helpdesk`. Saat ini baru berupa halaman antarmuka stub pada PoC awal dan perlu dimigrasikan secara penuh tanpa ada fitur yang tertinggal.
 - **Rencana Implementasi**:
@@ -38,7 +38,7 @@ Dokumentasi komprehensif rencana migrasi, standardisasi arsitektur Next.js 16 Mo
 ## 3. Migrasi Unified Access Management & User Directory
 - **Kategori**: Auth, Security & User Management
 - **Prioritas**: High
-- **Status**: Backlog
+- **Status**: Completed
 - **Latar Belakang**:
   Akses pengguna ke dashboard saat ini dikelola melalui schema `helpdesk.access_user` dan `helpdesk.access_role`. Modul manajemen hak akses ini harus dapat diakses oleh administrator langsung di dalam dashboard terpadu tanpa bergantung pada service backend eksternal.
 - **Rencana Implementasi**:
