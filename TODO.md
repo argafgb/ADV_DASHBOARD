@@ -103,7 +103,7 @@ Dokumentasi komprehensif rencana migrasi, standardisasi arsitektur Next.js 16 Mo
 ## 8. Migrasi Network Performance Dashboard
 - **Kategori**: Feature Migration / IT Infrastructure
 - **Prioritas**: Medium
-- **Status**: Backlog
+- **Status**: Completed
 - **Latar Belakang**:
   Dashboard Network Performance berjalan di port 5708 untuk memantau status link koneksi cabang, latensi, dan availability jaringan VPN/SD-WAN.
 - **Rencana Implementasi**:
