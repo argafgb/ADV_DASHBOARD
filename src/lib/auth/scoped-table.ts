@@ -23,8 +23,8 @@ function siteExpression(dimension: SiteDimension) {
 }
 
 /** A filtered relation ensures every aggregate, count and detail query sees the same rows. */
-export function scopedTable(table: ScopedTableName, scope: DataScope) {
-  const source = sql`pm_asset_it.${sql(table)}`;
+export function scopedTable(table: ScopedTableName, scope: DataScope, schema = "pm_asset_it") {
+  const source = sql`${sql(schema)}.${sql(table)}`;
   const plan = planTableFilter(table, scope);
   switch (plan.kind) {
     case "all":
