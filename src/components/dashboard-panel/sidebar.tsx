@@ -33,7 +33,7 @@ export function Sidebar({ onOpenDashModal }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-50 h-dvh -translate-x-full bg-zinc-50 lg:translate-x-0 dark:bg-zinc-950 ease-in-out",
+        "fixed inset-y-0 left-0 z-50 h-dvh -translate-x-full bg-white lg:translate-x-0 dark:bg-zinc-950 ease-in-out",
         hydrated && "transition-[width] duration-300",
         !isSidebarOpen ? "w-22.5" : "w-64",
         settings.disabled && "hidden",
