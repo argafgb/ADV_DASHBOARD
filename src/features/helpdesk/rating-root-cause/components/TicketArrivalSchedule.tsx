@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { fetchTicketArrivalSchedule } from "../actions";
 import type { TicketArrivalHourRow } from "../types/ticketSchedule.types";
 import { formatNumber } from "../utils/rating-root-cause-utils";
@@ -100,7 +101,7 @@ function TicketDayModal({
   selectedBand: string | null;
   onClose: () => void;
 }) {
-  if (!date) return null;
+  if (!date || typeof document === "undefined") return null;
   const parsed = new Date(`${date}T00:00:00`);
   const total = hours.reduce((sum, value) => sum + value, 0);
   const bands = BANDS.map((band) => ({
@@ -121,7 +122,7 @@ function TicketDayModal({
     parsed.getDate(),
   );
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4"
       onMouseDown={onClose}
@@ -227,7 +228,8 @@ function TicketDayModal({
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -1,4 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, FileX2 } from "lucide-react";
 import { fetchOverSlaDetailTickets } from "../actions";
 import type { OverSlaTicketDetail } from "../services/leaderboardService";
@@ -19,6 +22,11 @@ export default function DetailTicketsModal({
 }: DetailTicketsModalProps) {
   const [modalTickets, setModalTickets] = useState<OverSlaTicketDetail[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,7 +52,9 @@ export default function DetailTicketsModal({
     };
   }, [ticketList]);
 
-  return (
+  if (!mounted || typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       onClick={onClose}
       className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-2 backdrop-blur-xs transition-opacity sm:p-4"
@@ -130,6 +140,7 @@ export default function DetailTicketsModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

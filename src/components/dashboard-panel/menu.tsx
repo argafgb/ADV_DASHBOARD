@@ -112,7 +112,7 @@ export function Menu({
 
                             <p
                               className={cn(
-                                "max-w-50 whitespace-normal wrap-break-word text-left transition-all",
+                                "max-w-50 whitespace-nowrap text-sm truncate text-left transition-all",
                                 isOpen === false
                                   ? "hidden opacity-0"
                                   : "block translate-x-0 opacity-100",
