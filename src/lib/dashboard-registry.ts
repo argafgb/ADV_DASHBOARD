@@ -2,6 +2,7 @@ import {
   assetMaintenanceMenuList,
   helpdeskMenuList,
   accessMenuList,
+  networkPerformanceMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -37,12 +38,21 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return accessMenuList;
     },
   },
+  "network-performance": {
+    id: "network-performance",
+    prefix: "/dashboard/network-performance",
+    title: "Network Performance Dashboard",
+    get menuList() {
+      return networkPerformanceMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
   if (pathname.startsWith("/dashboard/helpdesk")) return DASHBOARD_REGISTRY["helpdesk"];
   if (pathname.startsWith("/dashboard/asset-maintenance")) return DASHBOARD_REGISTRY["asset-maintenance"];
   if (pathname.startsWith("/dashboard/access")) return DASHBOARD_REGISTRY["access-management"];
+  if (pathname.startsWith("/dashboard/network-performance")) return DASHBOARD_REGISTRY["network-performance"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }

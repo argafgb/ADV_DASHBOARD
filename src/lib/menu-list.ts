@@ -15,6 +15,8 @@ import {
   Users,
   Shield,
   History,
+  BarChart2,
+  Server,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -164,6 +166,64 @@ export const accessMenuList: Menu[] = [
   },
 ];
 
+export const networkPerformanceMenuList: Menu[] = [
+  {
+    href: "/dashboard/network-performance",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/network-performance/sla-performance",
+    label: "SLA by Site",
+    icon: BarChart2,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/network-performance/downtime-incidents",
+    label: "Downtime Under SLA",
+    icon: AlertTriangle,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/network-performance/isp-bandwidth",
+    label: "ISP & Bandwidth",
+    icon: TrendingUp,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/network-performance/asset-infrastructure",
+    label: "Asset Infrastructure",
+    icon: Server,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const NETWORK_PERFORMANCE_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/network-performance": "menu.network-performance.overview.view",
+  "/dashboard/network-performance/sla-performance": "menu.network-performance.sla-site.view",
+  "/dashboard/network-performance/downtime-incidents": "menu.network-performance.downtime.view",
+  "/dashboard/network-performance/isp-bandwidth": "menu.network-performance.isp-bandwidth.view",
+  "/dashboard/network-performance/asset-infrastructure": "menu.network-performance.asset-infrastructure.view",
+};
+
+export function canViewNetworkPerformanceMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/network-performance")) return true;
+  const perm = NETWORK_PERFORMANCE_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -181,6 +241,9 @@ export function getMenuList(
       if (!canViewAssetPmMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewNetworkPerformanceMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -188,6 +251,7 @@ export function getMenuList(
       const isSubPathMatch =
         menu.href !== "/dashboard/asset-maintenance" &&
         menu.href !== "/dashboard/helpdesk" &&
+        menu.href !== "/dashboard/network-performance" &&
         pathname.startsWith(menu.href);
 
       return {
