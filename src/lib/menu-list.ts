@@ -13,6 +13,7 @@ import {
   Activity,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
+import { getDashboardForPath } from "./dashboard-registry";
 
 export type UserRole = "management" | "internal";
 
@@ -120,8 +121,8 @@ export function getMenuList(
   permissions?: string[],
 
 ): Menu[] {
-  const isHelpdesk = pathname.startsWith("/dashboard/helpdesk");
-  const rawList = isHelpdesk ? helpdeskMenuList : assetMaintenanceMenuList;
+  const dash = getDashboardForPath(pathname);
+  const rawList = dash?.menuList ?? [];
 
   return rawList
     .filter((menu) => {
