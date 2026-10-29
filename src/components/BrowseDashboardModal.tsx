@@ -338,10 +338,6 @@ export default function BrowseDashboardModal({
 
   if (!mounted) return null;
 
-  const currentPort = typeof window !== "undefined" ? window.location.port : "";
-  const currentPath =
-    typeof window !== "undefined" ? window.location.pathname : "";
-  const isAccessPage = currentPath.startsWith("/dashboard/access");
 
   return createPortal(
     <div
@@ -386,20 +382,16 @@ export default function BrowseDashboardModal({
         <div className="flex-1 overflow-y-auto px-3 pb-4 pt-3 sm:px-6 sm:pb-5">
           <div className="flex flex-col gap-1.5">
             {filteredItems.map((it) => {
-              const isAccessMgmt = it.id === "access-management";
-              const isHelpdeskCurrent = it.id === "helpdesk" && pathname.startsWith("/dashboard/helpdesk");
-              const isAssetPmCurrent = it.id === "asset-pm" && pathname.startsWith("/dashboard/asset-maintenance");
-              const isCurrent = isAccessMgmt
-                ? isAccessPage
-                : isHelpdeskCurrent ||
-                  isAssetPmCurrent ||
-                  (!isAccessPage &&
-                    (it.name === DASHBOARD_CONFIG.catalogName ||
-                      Boolean(
-                        it.href &&
-                          currentPort &&
-                          it.href.includes(`:${currentPort}/`),
-                      )));
+              const isHelpdeskCurrent =
+                it.id === "helpdesk" &&
+                (pathname.startsWith("/dashboard/helpdesk") || pathname === "/dashboard");
+              const isAssetPmCurrent =
+                it.id === "asset-pm" && pathname.startsWith("/dashboard/asset-maintenance");
+              const isAccessCurrent =
+                it.id === "access-management" &&
+                (pathname.startsWith("/dashboard/access") ||
+                  pathname.startsWith("/dashboard/access-management"));
+              const isCurrent = isHelpdeskCurrent || isAssetPmCurrent || isAccessCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (
