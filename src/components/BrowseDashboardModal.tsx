@@ -287,10 +287,7 @@ export default function BrowseDashboardModal({
       user?.username?.toLowerCase() === "int001" ||
       (role === "internal" && isItDivision));
 
-  const issuerBase = getIssuerBaseUrl();
-  const accessHref = issuerBase
-    ? `${issuerBase}/dashboard/access/users`
-    : "/dashboard/access/users";
+  const accessHref = "/dashboard/access/users";
 
   const dashboardAllowList = Array.isArray(user?.allowedDashboards)
     ? [...user.allowedDashboards, "it-repair-maintenance", "kaldev-performance"]
