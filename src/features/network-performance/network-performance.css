@@ -1,5 +1,5 @@
 @media (max-width: 767px) {
-  :root {
+  .network-performance-scope {
     --ws-card-pad: 16px;
   }
 
@@ -110,7 +110,7 @@
    Network Performance Dashboard — design tokens
    ============================================================ */
 
-:root {
+.network-performance-scope {
   /* ---- Backgrounds ---- */
   --bg-outer: #0b1120;
   --bg-page: #f5f6fa;
@@ -280,7 +280,8 @@
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.dark {
+.dark .network-performance-scope,
+.dark.network-performance-scope {
   --bg-outer: #030712;
   --bg-page: #090d16;
   --bg-card: #111827;

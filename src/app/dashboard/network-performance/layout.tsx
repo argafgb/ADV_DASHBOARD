@@ -34,7 +34,9 @@ export default async function NetworkPerformanceLayout({
       scope={scopeLabel}
     >
       <NetworkTopbarFilters />
-      {children}
+      <div className="network-performance-scope w-full min-w-0">
+        {children}
+      </div>
     </NetworkFilterProvider>
   );
 }

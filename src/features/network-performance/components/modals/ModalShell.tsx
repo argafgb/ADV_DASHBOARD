@@ -33,7 +33,7 @@ export default function ModalShell({
 
   return createPortal(
     <div
-      className="network-modal-overlay"
+      className="network-modal-overlay network-performance-scope"
       onClick={onClose}
       style={{
         position: "fixed",
