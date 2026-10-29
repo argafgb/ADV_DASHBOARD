@@ -19,7 +19,7 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
   "helpdesk": {
     id: "helpdesk",
     prefix: "/dashboard/helpdesk",
-    title: "Helpdesk & Ticketing",
+    title: "IT & DCT Helpdesk Dashboard",
     get menuList() {
       return helpdeskMenuList;
     },

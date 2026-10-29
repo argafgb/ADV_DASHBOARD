@@ -13,7 +13,7 @@ export function Navbar({ onOpenDashModal }: NavbarProps = {}) {
   const pageTitle = getDashboardTitle(pathname);
 
   return (
-    <header className="sticky top-0 z-40 isolate w-full shrink-0 overflow-visible border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur supports-backdrop-filter:bg-white/60 dark:supports-backdrop-filter:bg-zinc-950/60 shadow-sm">
+    <header className="sticky top-0 z-40 isolate w-full shrink-0 overflow-visible border-b border-zinc-200 dark:border-zinc-800 bg-[#FBFBFD]/95 dark:bg-zinc-950/95 backdrop-blur supports-backdrop-filter:bg-white/60 dark:supports-backdrop-filter:bg-zinc-950/60 shadow-sm">
       <div className="mx-3 flex h-14 min-w-0 items-center justify-between gap-2 sm:mx-6 sm:gap-3">
         {/* Left Side: Navigation Sheet & Page Header */}
         <div className="flex min-w-0 items-center space-x-3 shrink-0">

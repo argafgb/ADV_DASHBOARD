@@ -2,6 +2,7 @@
 
 import { X, Inbox } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useFilters } from "@/context/HelpdeskFilterContext";
 import { useQuarterFilter } from "@/features/helpdesk/comparison/hooks/useQuarterFilter";
 import { fetchRatingDetailTickets } from "../actions";
@@ -32,6 +33,10 @@ export default function RatingDetailModal({
 }: RatingDetailModalProps) {
   const { year, month, dept } = useFilters();
   const { quarter } = useQuarterFilter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [loading, setLoading] = useState<boolean>(false);
@@ -98,7 +103,7 @@ export default function RatingDetailModal({
     };
   }, [rating, currentPage, year, month, dept, quarter]);
 
-  if (rating === null) return null;
+  if (rating === null || !mounted || typeof document === "undefined") return null;
 
   const totalPages = Math.ceil(totalCount / limit) || 1;
 
@@ -113,7 +118,7 @@ export default function RatingDetailModal({
   // Label rating
   const ratingLabel = rating === 0 ? "No Rating" : `${rating} Bintang`;
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       className="fixed inset-0 z-60 flex items-center justify-center bg-black/45 p-2 backdrop-blur-xs animate-in fade-in duration-200 cursor-pointer sm:p-4"
@@ -314,6 +319,7 @@ export default function RatingDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

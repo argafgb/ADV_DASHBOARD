@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { X, AlertCircle, Gauge } from "lucide-react";
@@ -245,7 +246,8 @@ export default function SlaMetricCard({
       </Card>
 
       {/* Pop-up Modal untuk Detail Tiket Gagal */}
-      {showPopup && hasMissedTickets && (
+      {showPopup && hasMissedTickets && typeof document !== "undefined" &&
+        createPortal(
         <div
           onClick={() => setShowPopup(false)}
           className="fixed inset-0 z-3000 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
@@ -302,7 +304,8 @@ export default function SlaMetricCard({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

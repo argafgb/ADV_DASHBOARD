@@ -2,6 +2,7 @@
 
 import { X, Inbox, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RootCauseItem } from "../types/rootCause.types";
 import { useFilters } from "@/context/HelpdeskFilterContext";
 import { useQuarterFilter } from "@/features/helpdesk/comparison/hooks/useQuarterFilter";
@@ -209,8 +210,12 @@ export default function RootCauseDetailModal({
   const sidebar = useStore(useSidebar, (x) => x);
   const isOpen = sidebar?.getOpenState() ?? true;
   const isDisabled = sidebar?.settings?.disabled ?? false;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  if (!item) return null;
+  if (!item || !mounted || typeof document === "undefined") return null;
 
   const totalPages = Math.ceil(totalTickets / limit) || 1;
 
@@ -229,7 +234,7 @@ export default function RootCauseDetailModal({
     1,
   );
 
-  return (
+  return createPortal(
     <div
       className={cn(
         "root-cause-detail-view fixed top-14 bottom-0 right-0 left-0 z-30 flex flex-col overflow-hidden bg-white font-sans shadow-md animate-in fade-in transition-[left] ease-in-out duration-300 dark:bg-zinc-950",
@@ -678,6 +683,7 @@ export default function RootCauseDetailModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

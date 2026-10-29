@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Search,
@@ -48,6 +49,10 @@ export default function AppMenuIssueDetailModal({
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const TICKETS_PER_PAGE = 10;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Reset local search, branch, and expanded states when modal opens/changes
   const [prevOpenState, setPrevOpenState] = useState({ isOpen, detail });
@@ -146,7 +151,7 @@ export default function AppMenuIssueDetailModal({
     filteredTickets.length,
   );
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted || typeof document === "undefined") return null;
 
   const monthName = detail?.periodLabel ?? (
     detail?.month === 0
@@ -155,7 +160,7 @@ export default function AppMenuIssueDetailModal({
         ? INDONESIAN_MONTH_NAMES[detail.month - 1] ?? `Bulan ${detail.month}`
         : "-");
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-5 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
@@ -552,6 +557,7 @@ export default function AppMenuIssueDetailModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

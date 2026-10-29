@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { FileX2, X } from "lucide-react";
 import EmptyState from "@/components/shared/EmptyState";
 import { fetchReopenedTicketDetails } from "../actions";
@@ -33,6 +34,10 @@ export default function ReopenedTicketsModal({
   period: string;
   onClose: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [page, setPage] = useState(1);
   const [tickets, setTickets] = useState<ReopenedTicketDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +77,9 @@ export default function ReopenedTicketsModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  return (
+  if (!mounted || typeof document === "undefined") return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-2 backdrop-blur-xs sm:p-4" onClick={onClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="reopened-tickets-title" onClick={(event) => event.stopPropagation()} className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex items-start justify-between gap-3 border-b border-zinc-200 p-4 dark:border-zinc-800 sm:p-5">
@@ -104,6 +111,7 @@ export default function ReopenedTicketsModal({
           <button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((current) => current + 1)} className="rounded-lg border border-zinc-200 px-3 py-1.5 disabled:opacity-40 dark:border-zinc-700">Berikutnya</button>
         </div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

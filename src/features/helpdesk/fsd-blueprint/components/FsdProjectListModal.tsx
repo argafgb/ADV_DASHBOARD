@@ -10,7 +10,8 @@ import {
   Clock,
   CircleDashed,
 } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 interface FsdProjectListModalProps {
@@ -28,6 +29,10 @@ export function FsdProjectListModal({
   items,
   onApplyFilterToTable,
 }: FsdProjectListModalProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
@@ -38,7 +43,7 @@ export function FsdProjectListModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !status) return null;
+  if (!isOpen || !status || !mounted || typeof document === "undefined") return null;
 
   const filteredItems =
     status === "all" ? items : items.filter((r) => r.status === status);
@@ -83,7 +88,7 @@ export function FsdProjectListModal({
     status === "all" ? "terdaftar" : `berstatus ${status}`
   }`;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4 sm:p-6">
       {/* BACKDROP */}
       <div
@@ -218,6 +223,7 @@ export function FsdProjectListModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

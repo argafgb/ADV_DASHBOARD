@@ -27,7 +27,7 @@ export default function DashboardPanelLayout({
       <Sidebar onOpenDashModal={onOpenDashModal} />
       <div
         className={cn(
-          "relative isolate min-h-screen min-w-0 flex flex-col overflow-x-clip ease-in-out bg-zinc-100 dark:bg-zinc-900",
+          "relative min-h-screen min-w-0 flex flex-col overflow-x-clip ease-in-out bg-[#F5F6FA] dark:bg-zinc-900",
           hydrated && "transition-[margin-left] duration-300",
           !settings.disabled && (!isSidebarOpen ? "lg:ml-22.5" : "lg:ml-64"),
         )}
