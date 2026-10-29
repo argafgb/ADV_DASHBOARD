@@ -265,28 +265,35 @@ export default function BrowseDashboardModal({
   const userDivision = (user?.codeDivision || "").toUpperCase().trim();
   const isItDivision = userDivision === "DIV-WSS" || userDivision === "DIV-IT";
 
+  const permissions = new Set(access?.permissions ?? []);
+  const isSuperAdmin =
+    permissions.has("*") ||
+    access?.roleKey === "super_admin" ||
+    access?.roleKey === "super-admin" ||
+    access?.roleKey === "it-admin" ||
+    access?.roleKey === "it-product";
+
   // Role staff, branch-manager, regional-head, maupun management standar TIDAK melihat Access Management
   const isRestrictedRole =
-    access?.roleKey === "staff" ||
-    access?.roleKey === "branch-manager" ||
-    access?.roleKey === "regional-head" ||
-    access?.roleKey === "management";
+    !isSuperAdmin &&
+    (access?.roleKey === "staff" ||
+      access?.roleKey === "branch-manager" ||
+      access?.roleKey === "regional-head" ||
+      access?.roleKey === "management");
 
-  const permissions = new Set(access?.permissions ?? []);
   const hasAccessManagementPerm =
+    isSuperAdmin ||
     permissions.has("access.users.manage") ||
     permissions.has("access.roles.manage") ||
     permissions.has("access.audit.view");
 
   const canAccessManagement =
-    !isRestrictedRole &&
-    (hasAccessManagementPerm ||
-      access?.roleKey === "it-product" ||
-      access?.roleKey === "it-admin" ||
-      user?.nik === "INT001" ||
-      user?.username?.toLowerCase() === "int001" ||
-      (role === "internal" && isItDivision));
-
+    isSuperAdmin ||
+    (!isRestrictedRole &&
+      (hasAccessManagementPerm ||
+        user?.nik === "INT001" ||
+        user?.username?.toLowerCase() === "int001" ||
+        (role === "internal" && isItDivision)));
   const accessHref = "/dashboard/access/users";
 
   const dashboardAllowList = Array.isArray(user?.allowedDashboards)
@@ -310,6 +317,7 @@ export default function BrowseDashboardModal({
   const allowedItems = loading
     ? []
     : catalogWithAccess.filter((it) => {
+        if (isSuperAdmin) return true;
         if (
           it.id === "bug-tracker" &&
           !["it-admin", "it-product"].includes((access?.roleKey ?? "").trim().toLowerCase())
