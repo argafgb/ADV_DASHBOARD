@@ -67,6 +67,7 @@ export function Menu({
       <nav className="mt-4 h-full w-full">
         <ul className="flex flex-col items-start space-y-1 w-full px-2">
           {menus.map(({ href, label, icon: Icon, active, submenus }, index) => {
+            const isRootCauseMenu = label === "Ticketing & Root Cause";
             const isActive = !!(
               (active === undefined &&
                 (pathname === href ||
@@ -112,7 +113,7 @@ export function Menu({
 
                             <p
                               className={cn(
-                                "max-w-50 whitespace-nowrap text-sm truncate text-left transition-all",
+                                isRootCauseMenu ? "whitespace-nowrap text-sm transition-all text-left" : "max-w-50 truncate text-sm transition-all text-left",
                                 isOpen === false
                                   ? "hidden opacity-0"
                                   : "block translate-x-0 opacity-100",
