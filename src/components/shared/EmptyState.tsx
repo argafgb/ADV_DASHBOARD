@@ -17,7 +17,7 @@ interface EmptyStateProps {
  * Standard Purpose-Driven Empty State Component.
  * Displays a clean icon badge, title, description, and optional action.
  */
-export default function EmptyState({
+export function EmptyState({
   icon: Icon = FolderX,
   title,
   description,
@@ -54,3 +54,5 @@ export default function EmptyState({
     </div>
   );
 }
+
+export default EmptyState;
