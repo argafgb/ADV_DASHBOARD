@@ -147,7 +147,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "globe",
     color: "#06B6D4",
     status: "active",
-    href: "http://103.76.204.104:5708/",
+    href: "/dashboard/network-performance",
   },
   {
     id: "process-risk",
@@ -391,7 +391,14 @@ export default function BrowseDashboardModal({
                 it.id === "access-management" &&
                 (pathname.startsWith("/dashboard/access") ||
                   pathname.startsWith("/dashboard/access-management"));
-              const isCurrent = isHelpdeskCurrent || isAssetPmCurrent || isAccessCurrent;
+              const isNetworkPerformanceCurrent =
+                it.id === "network-performance" &&
+                pathname.startsWith("/dashboard/network-performance");
+              const isCurrent =
+                isHelpdeskCurrent ||
+                isAssetPmCurrent ||
+                isAccessCurrent ||
+                isNetworkPerformanceCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (
