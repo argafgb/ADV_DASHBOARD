@@ -236,27 +236,27 @@ async function getAbsencesRaw(
       }[]
     >`
       SELECT
-        employee_name AS name,
-        department_name AS "departmentName",
+        a.employee_name AS name,
+        a.department_name AS "departmentName",
         COUNT(*)::int AS "totalHari",
-        SUM(CASE WHEN is_late = true THEN 1 ELSE 0 END)::int AS "totalTelat",
-        SUM(CASE WHEN is_single_absent = true THEN 1 ELSE 0 END)::int AS "totalAbsenSebelah",
-        SUM(CASE WHEN is_no_attendance = true THEN 1 ELSE 0 END)::int AS "totalTidakAbsen",
+        SUM(CASE WHEN a.is_late = true THEN 1 ELSE 0 END)::int AS "totalTelat",
+        SUM(CASE WHEN a.is_single_absent = true THEN 1 ELSE 0 END)::int AS "totalAbsenSebelah",
+        SUM(CASE WHEN a.is_no_attendance = true THEN 1 ELSE 0 END)::int AS "totalTidakAbsen",
         ROUND(
           (
-            (COUNT(*) - SUM(CASE WHEN is_late = true OR is_single_absent = true OR is_no_attendance = true THEN 1 ELSE 0 END))::numeric
+            (COUNT(*) - SUM(CASE WHEN a.is_late = true OR a.is_single_absent = true OR a.is_no_attendance = true THEN 1 ELSE 0 END))::numeric
             / COUNT(*)
           ) * 100,
           2
         )::float AS nilai
-      FROM helpdesk.helpdesk_attendance
-      WHERE year = ${year}::int
+      FROM helpdesk.helpdesk_attendance a
+      WHERE a.year = ${year}::int
         AND ${monthCondition}
         AND ${deptCondition}
-      GROUP BY employee_name, employee_code, department_name
-      HAVING SUM(CASE WHEN is_late = true THEN 1 ELSE 0 END) > 0
-          OR SUM(CASE WHEN is_single_absent = true THEN 1 ELSE 0 END) > 0
-          OR SUM(CASE WHEN is_no_attendance = true THEN 1 ELSE 0 END) > 0
+      GROUP BY a.employee_name, a.employee_code, a.department_name
+      HAVING SUM(CASE WHEN a.is_late = true THEN 1 ELSE 0 END) > 0
+          OR SUM(CASE WHEN a.is_single_absent = true THEN 1 ELSE 0 END) > 0
+          OR SUM(CASE WHEN a.is_no_attendance = true THEN 1 ELSE 0 END) > 0
       ORDER BY name ASC;
     `;
     console.log(

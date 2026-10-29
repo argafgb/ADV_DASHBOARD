@@ -1,6 +1,7 @@
 export const instant = false;
 
 import { getDashboardFilters } from "@/lib/helpdesk/dashboard-filters";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { requirePagePermission } from "@/lib/access/session";
 import { getCombinedSLAData } from "@/features/helpdesk/overview/services/breakdownSLAService";
@@ -23,6 +24,7 @@ interface PageProps {
 }
 
 async function OverviewContainer({ searchParams }: PageProps) {
+  await connection();
   const access = await requirePagePermission("menu.helpdesk.overview.view");
   const params = await searchParams;
   const { year, month } = getDashboardFilters(params);
@@ -59,7 +61,8 @@ async function OverviewContainer({ searchParams }: PageProps) {
   );
 }
 
-export default function OverviewPage({ searchParams }: PageProps) {
+export default async function OverviewPage({ searchParams }: PageProps) {
+  await connection();
   return (
     <div className="w-full space-y-6 font-sans">
       <header>

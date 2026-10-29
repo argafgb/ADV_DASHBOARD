@@ -1,5 +1,6 @@
 export const instant = false;
 
+import { connection } from "next/server";
 import { getTicketRatingData } from "@/features/helpdesk/rating-root-cause/services/ticketRatingService";
 import { getDashboardFilters } from "@/lib/helpdesk/dashboard-filters";
 import { Suspense } from "react";
@@ -21,6 +22,7 @@ interface PageProps {
 }
 
 async function RatingRootCauseContainer({ searchParams }: PageProps) {
+  await connection();
   const access = await requirePagePermission(
     "menu.helpdesk.rating-root-cause.view",
   );
@@ -43,7 +45,8 @@ async function RatingRootCauseContainer({ searchParams }: PageProps) {
   );
 }
 
-export default function RatingRootCausePage({ searchParams }: PageProps) {
+export default async function RatingRootCausePage({ searchParams }: PageProps) {
+  await connection();
   return (
     <div className="w-full space-y-6 font-sans">
       <header>

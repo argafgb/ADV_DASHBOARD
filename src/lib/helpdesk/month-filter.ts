@@ -51,7 +51,7 @@ export function getMonthFilterLabel(value: string): string {
   return `${getMonthName(start)} - ${getMonthName(end)}`;
 }
 
-export function defaultMonthFilter(year: string, now = new Date()): string {
+export function defaultMonthFilter(year: string, now?: Date): string {
   void year;
   void now;
   return DEFAULT_MONTH_FILTER;
@@ -59,25 +59,25 @@ export function defaultMonthFilter(year: string, now = new Date()): string {
 
 export function normalizeYear(
   value: string | null | undefined,
-  now = new Date(),
+  now?: Date,
 ): string {
   void now;
   if (!value || !/^\d{4}$/.test(value)) return DEFAULT_GLOBAL_YEAR;
   return value;
 }
 
-export function getMaxSelectableMonth(year: string, now = new Date()): number {
+export function getMaxSelectableMonth(year: string, now?: Date): number {
   const selectedYear = Number(year);
-  const currentYear = now.getFullYear();
+  const currentYear = now ? now.getFullYear() : 2026;
   if (selectedYear < currentYear) return 12;
   if (selectedYear > currentYear) return 0;
-  return now.getMonth() + 1;
+  return now ? now.getMonth() + 1 : 12;
 }
 
 export function normalizeMonthFilter(
   value: string | null | undefined,
   year: string,
-  now = new Date(),
+  now?: Date,
 ): string {
   const fallback = defaultMonthFilter(year, now);
   if (!value) return fallback;

@@ -1,5 +1,6 @@
 export const instant = false;
 
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { getDashboardFilters } from "@/lib/helpdesk/dashboard-filters";
 import { requirePagePermission } from "@/lib/access/session";
@@ -16,6 +17,7 @@ interface PageProps {
 }
 
 async function FsdBlueprintContainer({ searchParams }: PageProps) {
+  await connection();
   const access = await requirePagePermission(
     "menu.helpdesk.fsd-blueprint.view",
   );
@@ -33,7 +35,8 @@ async function FsdBlueprintContainer({ searchParams }: PageProps) {
   return <FsdBlueprintClient items={items} />;
 }
 
-export default function FsdBlueprintPage({ searchParams }: PageProps) {
+export default async function FsdBlueprintPage({ searchParams }: PageProps) {
+  await connection();
   return (
     <div className="w-full space-y-6 font-sans">
       <header>

@@ -188,7 +188,7 @@ export function HelpdeskTopbarFilters() {
     pathname === "/dashboard/helpdesk/leaderboard" ||
     pathname === "/dashboard/leaderboard";
 
-  const maxSelectable = getMaxSelectableMonth(year);
+  const maxSelectable = getMaxSelectableMonth(year, new Date());
   const { start, end } = parseMonthRange(month);
 
   const isSelected = (m: number) => {

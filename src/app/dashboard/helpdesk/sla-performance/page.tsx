@@ -1,5 +1,6 @@
 export const instant = false;
 
+import { connection } from "next/server";
 import { getDashboardFilters } from "@/lib/helpdesk/dashboard-filters";
 import { Suspense } from "react";
 import { requirePagePermission } from "@/lib/access/session";
@@ -25,6 +26,7 @@ interface PageProps {
 }
 
 async function SlaPerformanceContainer({ searchParams }: PageProps) {
+  await connection();
   const access = await requirePagePermission(
     "menu.helpdesk.sla-performance.view",
   );
@@ -66,7 +68,8 @@ async function SlaPerformanceContainer({ searchParams }: PageProps) {
   );
 }
 
-export default function SlaPerformancePage({ searchParams }: PageProps) {
+export default async function SlaPerformancePage({ searchParams }: PageProps) {
+  await connection();
   return (
     <div className="w-full space-y-6 font-sans">
       <header>

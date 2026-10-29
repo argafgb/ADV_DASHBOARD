@@ -1,5 +1,6 @@
 export const instant = false;
 
+import { connection } from "next/server";
 import { getDashboardFilters } from "@/lib/helpdesk/dashboard-filters";
 import { Suspense } from "react";
 import { requirePagePermission } from "@/lib/access/session";
@@ -16,6 +17,7 @@ interface PageProps {
 }
 
 async function LeaderboardContainer({ searchParams }: PageProps) {
+  await connection();
   const access = await requirePagePermission("menu.helpdesk.leaderboard.view");
   const params = await searchParams;
   const filters = getDashboardFilters(params);
@@ -30,7 +32,8 @@ async function LeaderboardContainer({ searchParams }: PageProps) {
   return <LeaderboardDashboardClient initialData={data} />;
 }
 
-export default function LeaderboardPage({ searchParams }: PageProps) {
+export default async function LeaderboardPage({ searchParams }: PageProps) {
+  await connection();
   return (
     <Suspense fallback={<HelpdeskLeaderboardSkeleton />}>
       <LeaderboardContainer searchParams={searchParams} />

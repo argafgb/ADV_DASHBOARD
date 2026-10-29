@@ -1,5 +1,6 @@
 export const instant = false;
 
+import { connection } from "next/server";
 import { buildCategoryComparison } from "@/features/helpdesk/comparison/utils/comparisonAggregates";
 import { getDashboardFilters } from "@/lib/helpdesk/dashboard-filters";
 import { Suspense } from "react";
@@ -24,6 +25,7 @@ interface PageProps {
 }
 
 async function ComparisonContainer({ searchParams }: PageProps) {
+  await connection();
   const access = await requirePagePermission("menu.helpdesk.comparison.view");
   const params = await searchParams;
 
@@ -57,7 +59,8 @@ async function ComparisonContainer({ searchParams }: PageProps) {
   );
 }
 
-export default function ComparisonPage({ searchParams }: PageProps) {
+export default async function ComparisonPage({ searchParams }: PageProps) {
+  await connection();
   return (
     <div className="w-full space-y-6 font-sans">
       <header>
