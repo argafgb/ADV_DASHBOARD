@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, Clock, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { IssueItem } from "../types/issuesData";
 import {
@@ -42,7 +43,13 @@ export default function IssueRecordDrawer({
   allItems,
   onClose,
 }: IssueRecordDrawerProps) {
-  if (!item) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!item || !mounted || typeof document === "undefined") return null;
 
   const d = buildIssueDetail(item, allItems);
   const flagOk = d.flag === "Lengkap";
@@ -59,10 +66,10 @@ export default function IssueRecordDrawer({
         ? "bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-400"
         : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400";
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4 font-sans"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 font-sans backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -401,6 +408,7 @@ export default function IssueRecordDrawer({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

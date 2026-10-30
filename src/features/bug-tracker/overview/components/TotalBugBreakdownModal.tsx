@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, X } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import { BugBreakdownData, SimpleStatus } from "../types/overviewTypes";
@@ -61,16 +62,22 @@ export default function TotalBugBreakdownModal({
   onContributorClick,
   onOpenIssuesData,
 }: TotalBugBreakdownModalProps) {
-  if (!isOpen || !data) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !data || !mounted || typeof document === "undefined") return null;
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose();
   };
 
-  return (
+  return createPortal(
     <div
       onClick={handleBackdropClick}
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4 font-sans animate-in fade-in duration-200 select-none"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 font-sans backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -261,6 +268,7 @@ export default function TotalBugBreakdownModal({
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

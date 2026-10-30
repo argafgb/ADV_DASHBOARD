@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { DashboardDataset, SanitizedProject } from "../types/types";
 import { Card, Icon } from "./UI";
 import { PieChart } from "./Charts";
@@ -1050,7 +1051,7 @@ export function TabCategory({
       </div>
 
       {/* Responsive interactive drill-down pop-up modals */}
-      {activeModal && (
+      {activeModal && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-2000 flex items-center justify-center p-4">
           {/* Backdrop blur effect */}
           <div
@@ -1473,7 +1474,8 @@ export function TabCategory({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

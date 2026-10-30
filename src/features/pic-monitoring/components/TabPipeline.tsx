@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { DashboardDataset, SanitizedProject } from "../types/types";
 import { filterPipelineProjects, type PipelineProjectFilter } from "../utils/parser";
 import { Card, ChipRow, Icon, Pill } from "./UI";
@@ -318,7 +319,7 @@ export function TabPipeline({
       </div>
 
       {/* Dynamic Pop-up Modal with absolute backdrop focus */}
-      {activeModal && (
+      {activeModal && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-2000 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-200"
           {...backdropDismissProps(closeActiveModal)}
@@ -431,7 +432,8 @@ export function TabPipeline({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CheckCircle2, ChevronRight, FileText, Search, TriangleAlert, Users } from 'lucide-react';
@@ -678,6 +679,17 @@ function StatCard({
 }
 
 function HistoryDrawer({ workplan, onClose }: { workplan: Workplan; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const years = VALID_YEARS;
   const labels = Array.from(
     new Set(years.flatMap((y) => periodsFor(workplan, y).map((p) => p.label))),
@@ -687,31 +699,22 @@ function HistoryDrawer({ workplan, onClose }: { workplan: Workplan; onClose: () 
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   });
 
-  return (
+  if (!mounted || typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`Riwayat ${workplan.name}`}
-      onKeyDown={(e) => e.key === 'Escape' && onClose()}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 90,
-        display: 'flex',
-        justifyContent: 'flex-end',
-        background: 'rgb(15 23 42 / 0.3)',
-      }}
+      className="process-risk-scope fixed inset-0 z-[100] flex justify-end bg-slate-950/40 backdrop-blur-xs transition-opacity animate-in fade-in-0 duration-200"
       onClick={onClose}
     >
       <div
-        className="scroll-area history-drawer"
+        className="scroll-area history-drawer h-full w-[min(560px,100vw)] overflow-y-auto p-6 shadow-2xl transition-transform animate-in slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(560px, 100vw)',
-          height: '100%',
-          overflowY: 'auto',
           background: 'var(--bg-card)',
-          padding: 24,
+          boxShadow: '-8px 0 32px rgba(0, 0, 0, 0.2)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
@@ -882,7 +885,8 @@ function HistoryDrawer({ workplan, onClose }: { workplan: Workplan; onClose: () 
           bukan bukti terlambat atau gagal.
         </p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
