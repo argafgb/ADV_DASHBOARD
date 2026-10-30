@@ -1,6 +1,7 @@
 import {
   Building2,
   LayoutGrid,
+  AlertCircle,
   TrendingUp,
   LucideIcon,
   CircleDollarSign,
@@ -599,6 +600,56 @@ export function canViewItRepairMenu(
   return permissions.includes(perm);
 }
 
+export const kaldevPerformanceMenuList: Menu[] = [
+  {
+    href: "/dashboard/kaldev-performance",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/kaldev-performance/action-required",
+    label: "Action Required",
+    icon: AlertCircle,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/kaldev-performance/team-performance",
+    label: "Team Performance",
+    icon: Users,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/kaldev-performance/project-register",
+    label: "Project Register",
+    icon: FolderKanban,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const KALDEV_PERFORMANCE_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/kaldev-performance": "menu.kaldev-performance.overview.view",
+  "/dashboard/kaldev-performance/action-required": "menu.kaldev-performance.action-required.view",
+  "/dashboard/kaldev-performance/team-performance": "menu.kaldev-performance.team-performance.view",
+  "/dashboard/kaldev-performance/project-register": "menu.kaldev-performance.project-register.view",
+};
+
+export function canViewKaldevPerformanceMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/kaldev-performance")) return true;
+  const perm = KALDEV_PERFORMANCE_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -640,6 +691,9 @@ export function getMenuList(
       if (!canViewItRepairMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewKaldevPerformanceMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -655,6 +709,7 @@ export function getMenuList(
         menu.href !== "/dashboard/learning-growth" &&
         menu.href !== "/dashboard/overtime" &&
         menu.href !== "/dashboard/it-repair-maintenance" &&
+        menu.href !== "/dashboard/kaldev-performance" &&
         pathname.startsWith(menu.href);
 
       return {

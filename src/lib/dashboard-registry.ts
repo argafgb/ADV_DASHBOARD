@@ -10,6 +10,7 @@ import {
   learningGrowthMenuList,
   overtimeMenuList,
   itRepairMenuList,
+  kaldevPerformanceMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -109,6 +110,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return itRepairMenuList;
     },
   },
+  "kaldev-performance": {
+    id: "kaldev-performance",
+    prefix: "/dashboard/kaldev-performance",
+    title: "Kaldev Performance Dashboard",
+    get menuList() {
+      return kaldevPerformanceMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -123,6 +132,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/learning-growth")) return DASHBOARD_REGISTRY["learning-growth"];
   if (pathname.startsWith("/dashboard/overtime")) return DASHBOARD_REGISTRY["overtime"];
   if (pathname.startsWith("/dashboard/it-repair-maintenance")) return DASHBOARD_REGISTRY["it-repair-maintenance"];
+  if (pathname.startsWith("/dashboard/kaldev-performance")) return DASHBOARD_REGISTRY["kaldev-performance"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }
