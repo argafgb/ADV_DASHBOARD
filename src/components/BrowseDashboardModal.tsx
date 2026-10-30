@@ -162,7 +162,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "clock",
     color: "#EA580C",
     status: "active",
-    href: "http://103.76.204.104:5711/",
+    href: "/dashboard/overtime",
   },
   {
     id: "it-repair-maintenance",

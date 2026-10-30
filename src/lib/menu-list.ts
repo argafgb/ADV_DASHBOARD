@@ -1,4 +1,5 @@
 import {
+  Building2,
   LayoutGrid,
   TrendingUp,
   LucideIcon,
@@ -513,6 +514,48 @@ export function canViewLearningGrowthMenu(
   return permissions.includes(perm);
 }
 
+export const overtimeMenuList: Menu[] = [
+  {
+    href: "/dashboard/overtime",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/overtime/employee-compliance",
+    label: "Employee Compliance",
+    icon: Users,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/overtime/organization",
+    label: "Organization Analysis",
+    icon: Building2,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const OVERTIME_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/overtime": "menu.overtime.overview.view",
+  "/dashboard/overtime/employee-compliance": "menu.overtime.employee-compliance.view",
+  "/dashboard/overtime/organization": "menu.overtime.organization-analysis.view",
+};
+
+export function canViewOvertimeMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/overtime")) return true;
+  const perm = OVERTIME_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -548,6 +591,9 @@ export function getMenuList(
       if (!canViewLearningGrowthMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewOvertimeMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -561,6 +607,7 @@ export function getMenuList(
         menu.href !== "/dashboard/process-risk" &&
         menu.href !== "/dashboard/bug-tracker" &&
         menu.href !== "/dashboard/learning-growth" &&
+        menu.href !== "/dashboard/overtime" &&
         pathname.startsWith(menu.href);
 
       return {
