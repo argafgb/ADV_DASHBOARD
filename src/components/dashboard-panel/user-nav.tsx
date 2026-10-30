@@ -37,7 +37,7 @@ type AuthProfile = {
   access?: { roleName?: string; roleKey?: string };
 };
 
-const DEFAULT_LOGIN_URL = "http://103.76.204.104:5703/login";
+const DEFAULT_LOGIN_URL = "/login";
 
 function getLogoutUrl(returnTo: string): string {
   const loginUrl = process.env.NEXT_PUBLIC_LOGIN_URL || DEFAULT_LOGIN_URL;
@@ -156,7 +156,8 @@ export function UserNav({ isOpen = true }: { isOpen?: boolean }) {
   function handleLogout() {
     try {
       setIsLoggingOut(true);
-      window.location.assign(getLogoutUrl(window.location.href));
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      window.location.assign(getLogoutUrl(currentPath));
     } catch {
       setIsLoggingOut(false);
     }

@@ -36,6 +36,8 @@ export async function getIssuerAccess(token: string): Promise<IssuerAccess | nul
       {
         nik: string;
         user_status: string;
+        employee_name: string | null;
+        code_division: string | null;
         role_key: string | null;
         role_name: string | null;
         fleet_role: string | null;
@@ -48,6 +50,8 @@ export async function getIssuerAccess(token: string): Promise<IssuerAccess | nul
       SELECT
         u.nik,
         u.status AS user_status,
+        u.employee_name,
+        u.code_division,
         r.key AS role_key,
         r.name AS role_name,
         r.fleet_role,
@@ -117,6 +121,8 @@ export async function getIssuerAccess(token: string): Promise<IssuerAccess | nul
     return {
       user: {
         nik: row.nik,
+        ...(row.employee_name ? { name: row.employee_name } : {}),
+        ...(row.code_division ? { codeDivision: row.code_division } : {}),
         role: row.fleet_role || "management",
         allowedDashboards: effectiveAllowedDashboards,
       },

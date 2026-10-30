@@ -62,7 +62,17 @@ export async function GET(req: Request) {
   const issuer = await getIssuerAccess(token);
   if (issuer && issuer.user.nik === user.nik) {
     return NextResponse.json(
-      { user: issuer.user, access: issuer.access },
+      {
+        user: {
+          ...user,
+          ...issuer.user,
+          name: (issuer.user.name as string | undefined) || user.name,
+          codeDivision:
+            (issuer.user.codeDivision as string | undefined) ||
+            user.codeDivision,
+        },
+        access: issuer.access,
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   }

@@ -183,17 +183,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
 ];
 
 export function getIssuerBaseUrl(): string {
-  if (typeof window !== "undefined") {
-    const { protocol, hostname, port } = window.location;
-    if (port === "5703") {
-      return "";
-    }
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return `${protocol}//${hostname}:3000`;
-    }
-    return `${protocol}//${hostname}:5703`;
-  }
-  return "http://103.76.204.104:5703";
+  return "";
 }
 
 const emptySubscribe = () => () => {};
@@ -229,23 +219,13 @@ export default function BrowseDashboardModal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const issuerBase = getIssuerBaseUrl();
-    const url = issuerBase ? `${issuerBase}/api/auth/me` : "/api/auth/me";
-    fetch(url, { credentials: "include" })
+    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         setAuthData(data);
         setLoading(false);
       })
-      .catch(() => {
-        fetch("/api/auth/me", { credentials: "include" })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            setAuthData(data);
-            setLoading(false);
-          })
-          .catch(() => setLoading(false));
-      });
+      .catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
