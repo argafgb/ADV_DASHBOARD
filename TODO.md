@@ -127,7 +127,7 @@ Dokumentasi komprehensif rencana migrasi, standardisasi arsitektur Next.js 16 Mo
 ## 10. Migrasi Overtime Analytics Dashboard
 - **Kategori**: Feature Migration / HR & Operational Cost
 - **Prioritas**: Medium
-- **Status**: Backlog
+- **Status**: Completed
 - **Latar Belakang**:
   Dashboard Overtime berjalan di port 5711 untuk analisis biaya dan jam lembur karyawan operasional di seluruh cabang.
 - **Rencana Implementasi**:
@@ -139,7 +139,7 @@ Dokumentasi komprehensif rencana migrasi, standardisasi arsitektur Next.js 16 Mo
 ## 11. Migrasi IT Repair & Maintenance Dashboard
 - **Kategori**: Feature Migration / Asset Maintenance
 - **Prioritas**: Medium
-- **Status**: Backlog
+- **Status**: Completed
 - **Latar Belakang**:
   Dashboard IT Repair & Maintenance berjalan di port 5712 untuk pencatatan detail perbaikan hardware, pergantian suku cadang, dan vendor service.
 - **Rencana Implementasi**:
@@ -151,7 +151,7 @@ Dokumentasi komprehensif rencana migrasi, standardisasi arsitektur Next.js 16 Mo
 ## 12. Migrasi Kaldev Performance Dashboard
 - **Kategori**: Feature Migration / Software Engineering
 - **Prioritas**: Low
-- **Status**: Backlog
+- **Status**: Completed
 - **Latar Belakang**:
   Dashboard Kaldev Performance mencatat metrik produktivitas tim pengembang internal, commit git, dan milestone rilis aplikasi.
 - **Rencana Implementasi**:
