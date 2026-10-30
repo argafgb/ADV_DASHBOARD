@@ -130,7 +130,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "bookopen",
     color: "#0D9488",
     status: "active",
-    href: "http://103.76.204.104:5706/",
+    href: "/dashboard/learning-growth",
   },
   {
     id: "server-performance",
@@ -405,6 +405,9 @@ export default function BrowseDashboardModal({
               const isBugTrackerCurrent =
                 it.id === "bug-tracker" &&
                 pathname.startsWith("/dashboard/bug-tracker");
+              const isLearningGrowthCurrent =
+                it.id === "learning-growth" &&
+                pathname.startsWith("/dashboard/learning-growth");
               const isCurrent =
                 isHelpdeskCurrent ||
                 isAssetPmCurrent ||
@@ -413,7 +416,8 @@ export default function BrowseDashboardModal({
                 isPicMonitoringCurrent ||
                 isServerPerformanceCurrent ||
                 isProcessRiskCurrent ||
-                isBugTrackerCurrent;
+                isBugTrackerCurrent ||
+                isLearningGrowthCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (

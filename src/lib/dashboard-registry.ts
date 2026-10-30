@@ -7,6 +7,7 @@ import {
   serverPerformanceMenuList,
   processRiskMenuList,
   bugTrackerMenuList,
+  learningGrowthMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -82,6 +83,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return bugTrackerMenuList;
     },
   },
+  "learning-growth": {
+    id: "learning-growth",
+    prefix: "/dashboard/learning-growth",
+    title: "Learning & Growth Dashboard",
+    get menuList() {
+      return learningGrowthMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -93,6 +102,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/server-performance")) return DASHBOARD_REGISTRY["server-performance"];
   if (pathname.startsWith("/dashboard/process-risk")) return DASHBOARD_REGISTRY["process-risk"];
   if (pathname.startsWith("/dashboard/bug-tracker")) return DASHBOARD_REGISTRY["bug-tracker"];
+  if (pathname.startsWith("/dashboard/learning-growth")) return DASHBOARD_REGISTRY["learning-growth"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }

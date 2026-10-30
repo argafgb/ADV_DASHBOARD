@@ -1,0 +1,219 @@
+/* Scoped keyframes for Learning & Growth charts */
+@keyframes dh-chart-line-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes dh-chart-area-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dh-chart-point-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dh-chart-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes dhFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Animations and utility classes scoped to learning-growth-scope */
+.learning-growth-scope .dh-chart-line-draw {
+  animation: dh-chart-line-draw 760ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.learning-growth-scope .dh-chart-line-dashed {
+  stroke-dasharray: 7 6;
+}
+
+.learning-growth-scope .dh-chart-area-reveal {
+  animation: dh-chart-area-reveal 620ms ease-out both;
+}
+
+.learning-growth-scope .dh-chart-point-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dh-chart-point-pop 280ms ease-out both;
+}
+
+.learning-growth-scope .dh-chart-bar-grow {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: dh-chart-bar-grow 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.learning-growth-scope .dh-chart-label-reveal {
+  animation: dh-chart-area-reveal 360ms ease-out both;
+}
+
+.learning-growth-scope .dh-fade-up {
+  animation: dhFadeUp 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.learning-growth-scope .dh-fade-up-fast {
+  animation: dhFadeUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.learning-growth-scope .dh-delay-05 { animation-delay: 0.05s; }
+.learning-growth-scope .dh-delay-08 { animation-delay: 0.08s; }
+.learning-growth-scope .dh-delay-10 { animation-delay: 0.1s; }
+.learning-growth-scope .dh-delay-14 { animation-delay: 0.14s; }
+.learning-growth-scope .dh-delay-15 { animation-delay: 0.15s; }
+.learning-growth-scope .dh-delay-18 { animation-delay: 0.18s; }
+.learning-growth-scope .dh-delay-24 { animation-delay: 0.24s; }
+.learning-growth-scope .dh-delay-30 { animation-delay: 0.3s; }
+
+.learning-growth-scope .dh-card-3d {
+  background-image: none;
+  box-shadow: none;
+  transition:
+    border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.learning-growth-scope .dh-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+.learning-growth-scope .dh-scroll::-webkit-scrollbar-thumb {
+  background: #d7dce5;
+  border-radius: 999px;
+  border: 2px solid #f5f6fa;
+}
+.learning-growth-scope .dh-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Tooltip standard classes */
+.dd-ctip {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+  background: #ffffff;
+  border: 1px solid #f1f3f7;
+  border-radius: 10px;
+  padding: 8px 11px;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
+  font-size: 11.5px;
+  line-height: 1.45;
+  font-weight: 500;
+  max-width: 260px;
+  transform: translate(-50%, -100%);
+  color: #111827;
+}
+
+.dark .dd-ctip {
+  background: #18181b;
+  border-color: #27272a;
+  color: #f4f4f5;
+}
+
+.dd-ctip__title {
+  font-weight: 600;
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.dark .dd-ctip__title {
+  color: #d4d4d8;
+}
+
+.dd-ctip__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dd-ctip__row + .dd-ctip__row {
+  margin-top: 2px;
+}
+
+.dd-ctip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dd-ctip__lab {
+  font-weight: 600;
+}
+
+.dd-ctip__sep {
+  opacity: 0.6;
+}
+
+.dd-ctip__val {
+  margin-left: auto;
+  padding-left: 6px;
+  font-weight: 600;
+}
+
+/* Chart Dimming and Highlighting on Hover */
+.learning-growth-scope .dd-chart--dim .dd-seg-part,
+.learning-growth-scope .dd-chart--dim .dd-mark,
+.learning-growth-scope .dd-chart--dim .dd-chart-row,
+.learning-growth-scope .dd-chart--dim .dd-donut__lrow {
+  opacity: 0.35 !important;
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.learning-growth-scope .dd-chart--dim .dd-seg-part.is-hot,
+.learning-growth-scope .dd-chart--dim .dd-mark.is-hot,
+.learning-growth-scope .dd-chart--dim .dd-chart-row.is-hot,
+.learning-growth-scope .dd-chart--dim .dd-donut__lrow.is-hot {
+  opacity: 1 !important;
+}
+
+.learning-growth-scope .dd-chart-row {
+  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .learning-growth-scope .dh-chart-line-draw,
+  .learning-growth-scope .dh-chart-area-reveal,
+  .learning-growth-scope .dh-chart-point-pop,
+  .learning-growth-scope .dh-chart-bar-grow,
+  .learning-growth-scope .dh-chart-label-reveal,
+  .learning-growth-scope .dh-fade-up,
+  .learning-growth-scope .dh-fade-up-fast {
+    animation: none !important;
+    transition: none !important;
+  }
+}
