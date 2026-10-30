@@ -25,14 +25,37 @@ export async function searchEmployees(
   if (cleanQuery.length < 2) return [];
 
   const safeTop = Math.max(1, Math.min(top, 50));
+  const escapedQuery = cleanQuery
+    .replace(/\[/g, "[[]")
+    .replace(/%/g, "[%]")
+    .replace(/_/g, "[_]");
 
   try {
     const pool = await getMssqlPool();
     const result = await pool
       .request()
-      .input("Query", mssql.NVarChar(100), cleanQuery)
+      .input("ExactQuery", mssql.NVarChar(100), cleanQuery)
+      .input("PrefixPattern", mssql.NVarChar(210), `${escapedQuery}%`)
+      .input("ContainsPattern", mssql.NVarChar(210), `%${escapedQuery}%`)
       .input("Top", mssql.Int, safeTop)
-      .execute<EmployeeDirectoryItem>("UM_DB.dbo.USP_DASHBOARD_SearchEmployee");
+      .query<EmployeeDirectoryItem>(`
+        SELECT TOP (@Top)
+          u.NIK AS nik,
+          h.Name AS name,
+          h.CodeDivision AS code_division,
+          h.CodeDepartment AS code_department,
+          u.Branch AS branch,
+          CAST(CASE WHEN h.IsAktif = 'Y' AND ISNULL(u.IsLocked, 0) = 0 THEN 1 ELSE 0 END AS bit) AS is_active
+        FROM UM_DB.dbo.UM_Employee u WITH (NOLOCK)
+        INNER JOIN DA.dbo.HRD_Employee h WITH (NOLOCK)
+          ON h.EmployeeCode = u.NIK
+        WHERE (u.NIK LIKE @PrefixPattern OR h.Name LIKE @ContainsPattern)
+          AND h.IsAktif = 'Y'
+          AND ISNULL(u.IsLocked, 0) = 0
+        ORDER BY
+          CASE WHEN u.NIK = @ExactQuery THEN 0 ELSE 1 END,
+          h.Name;
+      `);
 
     const items = result.recordset ?? [];
     return items.filter(
@@ -74,7 +97,21 @@ export async function getEmployee(
     const result = await pool
       .request()
       .input("NIK", mssql.NVarChar(128), cleanNik)
-      .execute<EmployeeDirectoryItem>("UM_DB.dbo.USP_DASHBOARD_GetEmployee");
+      .query<EmployeeDirectoryItem>(`
+        SELECT TOP (1)
+          u.NIK AS nik,
+          h.Name AS name,
+          h.CodeDivision AS code_division,
+          h.CodeDepartment AS code_department,
+          u.Branch AS branch,
+          CAST(CASE WHEN h.IsAktif = 'Y' AND ISNULL(u.IsLocked, 0) = 0 THEN 1 ELSE 0 END AS bit) AS is_active
+        FROM UM_DB.dbo.UM_Employee u WITH (NOLOCK)
+        INNER JOIN DA.dbo.HRD_Employee h WITH (NOLOCK)
+          ON h.EmployeeCode = u.NIK
+        WHERE u.NIK = @NIK
+          AND h.IsAktif = 'Y'
+          AND ISNULL(u.IsLocked, 0) = 0;
+      `);
 
     const emp = result.recordset?.[0] ?? null;
     if (
