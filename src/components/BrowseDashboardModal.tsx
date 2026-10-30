@@ -139,7 +139,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "activity",
     color: "#7C3AED",
     status: "active",
-    href: "http://103.76.204.104:5707/",
+    href: "/dashboard/server-performance",
   },
   {
     id: "network-performance",
@@ -394,11 +394,15 @@ export default function BrowseDashboardModal({
               const isNetworkPerformanceCurrent =
                 it.id === "network-performance" &&
                 pathname.startsWith("/dashboard/network-performance");
+              const isServerPerformanceCurrent =
+                it.id === "server-performance" &&
+                pathname.startsWith("/dashboard/server-performance");
               const isCurrent =
                 isHelpdeskCurrent ||
                 isAssetPmCurrent ||
                 isAccessCurrent ||
-                isNetworkPerformanceCurrent;
+                isNetworkPerformanceCurrent ||
+                isServerPerformanceCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (
