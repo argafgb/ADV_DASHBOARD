@@ -3,6 +3,7 @@ import {
   helpdeskMenuList,
   accessMenuList,
   networkPerformanceMenuList,
+  learningGrowthMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -46,6 +47,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return networkPerformanceMenuList;
     },
   },
+  "learning-growth": {
+    id: "learning-growth",
+    prefix: "/dashboard/learning-growth",
+    title: "Learning & Growth Dashboard",
+    get menuList() {
+      return learningGrowthMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -53,6 +62,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/asset-maintenance")) return DASHBOARD_REGISTRY["asset-maintenance"];
   if (pathname.startsWith("/dashboard/access")) return DASHBOARD_REGISTRY["access-management"];
   if (pathname.startsWith("/dashboard/network-performance")) return DASHBOARD_REGISTRY["network-performance"];
+  if (pathname.startsWith("/dashboard/learning-growth")) return DASHBOARD_REGISTRY["learning-growth"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }

@@ -17,6 +17,8 @@ import {
   History,
   BarChart2,
   Server,
+  Award,
+  Calendar,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -224,6 +226,56 @@ export function canViewNetworkPerformanceMenu(
   return permissions.includes(perm);
 }
 
+export const learningGrowthMenuList: Menu[] = [
+  {
+    href: "/dashboard/learning-growth",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/learning-growth/training",
+    label: "Training",
+    icon: Users,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/learning-growth/sertifikasi",
+    label: "Certifications",
+    icon: Award,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/learning-growth/timeline",
+    label: "Timeline",
+    icon: Calendar,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const LEARNING_GROWTH_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/learning-growth": "menu.learning-growth.overview.view",
+  "/dashboard/learning-growth/training": "menu.learning-growth.training.view",
+  "/dashboard/learning-growth/sertifikasi": "menu.learning-growth.certifications.view",
+  "/dashboard/learning-growth/timeline": "menu.learning-growth.timeline.view",
+};
+
+export function canViewLearningGrowthMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/learning-growth")) return true;
+  const perm = LEARNING_GROWTH_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -244,6 +296,9 @@ export function getMenuList(
       if (!canViewNetworkPerformanceMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewLearningGrowthMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -252,6 +307,7 @@ export function getMenuList(
         menu.href !== "/dashboard/asset-maintenance" &&
         menu.href !== "/dashboard/helpdesk" &&
         menu.href !== "/dashboard/network-performance" &&
+        menu.href !== "/dashboard/learning-growth" &&
         pathname.startsWith(menu.href);
 
       return {
