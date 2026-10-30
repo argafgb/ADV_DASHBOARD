@@ -8,6 +8,7 @@ import {
   processRiskMenuList,
   bugTrackerMenuList,
   learningGrowthMenuList,
+  kaldevPerformanceMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -91,6 +92,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return learningGrowthMenuList;
     },
   },
+  "kaldev-performance": {
+    id: "kaldev-performance",
+    prefix: "/dashboard/kaldev-performance",
+    title: "Kaldev Performance Dashboard",
+    get menuList() {
+      return kaldevPerformanceMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -103,6 +112,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/process-risk")) return DASHBOARD_REGISTRY["process-risk"];
   if (pathname.startsWith("/dashboard/bug-tracker")) return DASHBOARD_REGISTRY["bug-tracker"];
   if (pathname.startsWith("/dashboard/learning-growth")) return DASHBOARD_REGISTRY["learning-growth"];
+  if (pathname.startsWith("/dashboard/kaldev-performance")) return DASHBOARD_REGISTRY["kaldev-performance"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }

@@ -178,7 +178,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "code",
     color: "#10B981",
     status: "active",
-    href: "http://103.76.204.104:5713/",
+    href: "/dashboard/kaldev-performance",
   },
 ];
 
