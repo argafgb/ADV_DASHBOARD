@@ -9,6 +9,7 @@ import {
   bugTrackerMenuList,
   learningGrowthMenuList,
   overtimeMenuList,
+  itRepairMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -100,6 +101,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return overtimeMenuList;
     },
   },
+  "it-repair-maintenance": {
+    id: "it-repair-maintenance",
+    prefix: "/dashboard/it-repair-maintenance",
+    title: "IT Repair & Maintenance Dashboard",
+    get menuList() {
+      return itRepairMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -113,6 +122,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/bug-tracker")) return DASHBOARD_REGISTRY["bug-tracker"];
   if (pathname.startsWith("/dashboard/learning-growth")) return DASHBOARD_REGISTRY["learning-growth"];
   if (pathname.startsWith("/dashboard/overtime")) return DASHBOARD_REGISTRY["overtime"];
+  if (pathname.startsWith("/dashboard/it-repair-maintenance")) return DASHBOARD_REGISTRY["it-repair-maintenance"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }

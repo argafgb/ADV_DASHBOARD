@@ -33,6 +33,7 @@ import {
   SearchCode,
   Award,
   Calendar,
+  Wrench,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -556,6 +557,48 @@ export function canViewOvertimeMenu(
   return permissions.includes(perm);
 }
 
+export const itRepairMenuList: Menu[] = [
+  {
+    href: "/dashboard/it-repair-maintenance",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/it-repair-maintenance/repair-tickets",
+    label: "Repair Tickets",
+    icon: Wrench,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/it-repair-maintenance/golden-unit",
+    label: "Golden Unit",
+    icon: Award,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const IT_REPAIR_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/it-repair-maintenance": "menu.it-repair-maintenance.overview.view",
+  "/dashboard/it-repair-maintenance/repair-tickets": "menu.it-repair-maintenance.repair-tickets.view",
+  "/dashboard/it-repair-maintenance/golden-unit": "menu.it-repair-maintenance.golden-unit.view",
+};
+
+export function canViewItRepairMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/it-repair-maintenance")) return true;
+  const perm = IT_REPAIR_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -594,6 +637,9 @@ export function getMenuList(
       if (!canViewOvertimeMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewItRepairMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -608,6 +654,7 @@ export function getMenuList(
         menu.href !== "/dashboard/bug-tracker" &&
         menu.href !== "/dashboard/learning-growth" &&
         menu.href !== "/dashboard/overtime" &&
+        menu.href !== "/dashboard/it-repair-maintenance" &&
         pathname.startsWith(menu.href);
 
       return {
