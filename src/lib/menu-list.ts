@@ -25,6 +25,11 @@ import {
   Mail,
   Database,
   Boxes,
+  Ticket,
+  Inbox,
+  ChartNoAxesCombined,
+  ClipboardCheck,
+  SearchCode,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -390,6 +395,72 @@ export function canViewProcessRiskMenu(
   return permissions.includes(perm);
 }
 
+export const bugTrackerMenuList: Menu[] = [
+  {
+    href: "/dashboard/bug-tracker",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/bug-tracker/issues-data",
+    label: "Issues Data",
+    icon: Ticket,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/bug-tracker/issues-by-project",
+    label: "Issues by Project",
+    icon: Inbox,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/bug-tracker/comparison",
+    label: "Comparison",
+    icon: ChartNoAxesCombined,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/bug-tracker/qa-tasks",
+    label: "QA Tasks",
+    icon: ClipboardCheck,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/bug-tracker/bug-hunter",
+    label: "Bug Hunter",
+    icon: SearchCode,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const BUG_TRACKER_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/bug-tracker": "menu.bug-tracker.overview.view",
+  "/dashboard/bug-tracker/issues-data": "menu.bug-tracker.issues-data.view",
+  "/dashboard/bug-tracker/issues-by-project": "menu.bug-tracker.issues-project.view",
+  "/dashboard/bug-tracker/comparison": "menu.bug-tracker.comparison.view",
+  "/dashboard/bug-tracker/qa-tasks": "menu.bug-tracker.qa-tasks.view",
+  "/dashboard/bug-tracker/bug-hunter": "menu.bug-tracker.bug-hunter.view",
+};
+
+export function canViewBugTrackerMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/bug-tracker")) return true;
+  const perm = BUG_TRACKER_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -419,6 +490,9 @@ export function getMenuList(
       if (!canViewProcessRiskMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewBugTrackerMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -430,6 +504,7 @@ export function getMenuList(
         menu.href !== "/dashboard/pic-monitoring" &&
         menu.href !== "/dashboard/server-performance" &&
         menu.href !== "/dashboard/process-risk" &&
+        menu.href !== "/dashboard/bug-tracker" &&
         pathname.startsWith(menu.href);
 
       return {

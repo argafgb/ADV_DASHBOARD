@@ -4,7 +4,6 @@ import { useState, useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { DASHBOARD_CONFIG } from "@/lib/dashboard-config";
 import {
   canAccessDashboard,
   type DashboardId,
@@ -123,7 +122,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "bug",
     color: "#DC2626",
     status: "active",
-    href: "http://103.76.204.104:5710/",
+    href: "/dashboard/bug-tracker",
   },
   {
     id: "learning-growth",
@@ -403,6 +402,9 @@ export default function BrowseDashboardModal({
               const isProcessRiskCurrent =
                 it.id === "process-risk" &&
                 pathname.startsWith("/dashboard/process-risk");
+              const isBugTrackerCurrent =
+                it.id === "bug-tracker" &&
+                pathname.startsWith("/dashboard/bug-tracker");
               const isCurrent =
                 isHelpdeskCurrent ||
                 isAssetPmCurrent ||
@@ -410,7 +412,8 @@ export default function BrowseDashboardModal({
                 isNetworkPerformanceCurrent ||
                 isPicMonitoringCurrent ||
                 isServerPerformanceCurrent ||
-                isProcessRiskCurrent;
+                isProcessRiskCurrent ||
+                isBugTrackerCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (

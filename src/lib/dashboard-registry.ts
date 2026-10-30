@@ -6,6 +6,7 @@ import {
   picMonitoringMenuList,
   serverPerformanceMenuList,
   processRiskMenuList,
+  bugTrackerMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -73,6 +74,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return processRiskMenuList;
     },
   },
+  "bug-tracker": {
+    id: "bug-tracker",
+    prefix: "/dashboard/bug-tracker",
+    title: "Bug & Issue Tracker Dashboard",
+    get menuList() {
+      return bugTrackerMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -83,6 +92,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/pic-monitoring")) return DASHBOARD_REGISTRY["pic-monitoring"];
   if (pathname.startsWith("/dashboard/server-performance")) return DASHBOARD_REGISTRY["server-performance"];
   if (pathname.startsWith("/dashboard/process-risk")) return DASHBOARD_REGISTRY["process-risk"];
+  if (pathname.startsWith("/dashboard/bug-tracker")) return DASHBOARD_REGISTRY["bug-tracker"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }
