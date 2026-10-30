@@ -3,6 +3,7 @@ import {
   helpdeskMenuList,
   accessMenuList,
   networkPerformanceMenuList,
+  bugTrackerMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -46,6 +47,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return networkPerformanceMenuList;
     },
   },
+  "bug-tracker": {
+    id: "bug-tracker",
+    prefix: "/dashboard/bug-tracker",
+    title: "Bug & Issue Tracker Dashboard",
+    get menuList() {
+      return bugTrackerMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -53,6 +62,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/asset-maintenance")) return DASHBOARD_REGISTRY["asset-maintenance"];
   if (pathname.startsWith("/dashboard/access")) return DASHBOARD_REGISTRY["access-management"];
   if (pathname.startsWith("/dashboard/network-performance")) return DASHBOARD_REGISTRY["network-performance"];
+  if (pathname.startsWith("/dashboard/bug-tracker")) return DASHBOARD_REGISTRY["bug-tracker"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }

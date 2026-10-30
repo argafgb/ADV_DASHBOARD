@@ -2,7 +2,7 @@ import { canonicalPeriod } from "@/lib/period-filter";
 import { normalizeCompany } from "@/lib/company-filter";
 import type { AssetFilterInput } from "@/types/asset-pm.types";
 
-export const GLOBAL_FILTER_KEYS = ["year", "month", "site", "company"] as const;
+export const GLOBAL_FILTER_KEYS = ["year", "month", "site", "company", "project", "role"] as const;
 export type GlobalFilterKey = (typeof GLOBAL_FILTER_KEYS)[number];
 export type DashboardSearchParamValue = string | string[] | undefined;
 export type DashboardSearchParams = Partial<
