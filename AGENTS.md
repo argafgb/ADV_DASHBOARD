@@ -167,3 +167,13 @@ src/
   - **Check Indicator**: Active selected options in dropdowns should indicate their selection with a checkmark (`CheckIcon`).
 - **Responsive Collapsible Controls**:
   Filter controls with horizontal button tabs (such as category or status tabs) MUST provide a responsive fallback that collapses into a `<FilterSelect>` on small viewports (`sm:hidden`).
+
+
+---
+
+## 11. CSS Isolation & Design Token Guardrails
+
+- **No Global `:root` Variable Overrides in Feature CSS**:
+  Feature-specific stylesheets MUST NOT override or declare CSS variables (especially shadcn design tokens like `--accent`, `--background`, `--foreground`, `--card`, `--border`, etc.) on `:root` or `.dark`.
+- **Feature Class Scoping**:
+  All feature-specific CSS variables and custom styles must be strictly scoped to a container class (e.g., `.feature-name-scope`) or converted into Tailwind utility classes directly. This prevents accidental styling leaks into global shell components like the sidebar, navbar, and modals.

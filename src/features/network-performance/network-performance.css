@@ -1,0 +1,345 @@
+@media (max-width: 767px) {
+  .network-performance-scope {
+    --ws-card-pad: 16px;
+  }
+
+  .network-kpi-grid,
+  .network-two-column-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .network-sla-summary {
+    flex-direction: column;
+    min-height: 0 !important;
+  }
+
+  .network-sla-kpis {
+    width: 100%;
+  }
+
+  .network-sla-kpis > * {
+    width: 100% !important;
+  }
+
+  .network-donut-layout {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 16px !important;
+  }
+
+  .network-donut-layout > svg {
+    align-self: center;
+    width: min(170px, 55vw) !important;
+    height: auto !important;
+  }
+
+  .network-cause-grid,
+  .network-region-grid,
+  .network-recap-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .network-isp-legend-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .network-card-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+
+  .network-card-header > div:last-child {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 8px 12px !important;
+  }
+
+  .network-inline-kpis {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 0;
+  }
+
+  .network-inline-kpis > * {
+    min-width: 0;
+    padding: 0 12px !important;
+  }
+
+  .network-inline-kpis > :nth-child(odd) {
+    border-left: 3px solid transparent !important;
+  }
+
+  .network-kpi-footer {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 5px !important;
+  }
+
+  .network-kpi-footer > span:last-child {
+    white-space: normal !important;
+  }
+
+  .network-modal-overlay {
+    align-items: flex-end !important;
+    padding: 8px !important;
+  }
+
+  .network-modal-overlay > div {
+    max-height: calc(100dvh - 16px) !important;
+    border-radius: 14px !important;
+  }
+
+  .network-section-card button,
+  .network-section-card input,
+  .network-section-card select {
+    min-height: 36px;
+  }
+}
+
+@media (max-width: 479px) {
+  .network-inline-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .network-cause-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ============================================================
+   Network Performance Dashboard — design tokens
+   ============================================================ */
+
+.network-performance-scope {
+  /* ---- Backgrounds ---- */
+  --bg-outer: #0b1120;
+  --bg-page: #f5f6fa;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --bg-row-item: #fafbfc;
+  --bg-subtle: #fafbfd;
+  --bg-input: #ffffff;
+  --bg-nav-active: #eff4fe;
+  --bg-hover: #f5f7fb;
+  --bg-disabled-cell: #f6f7f9;
+
+  /* ---- Text ---- */
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
+  --text-placeholder: #9ca3af;
+  --text-lightest: #b6bcc8;
+  --text-divider: #c2c8d2;
+  --text-on-accent: #ffffff;
+
+  /* ---- Brand / Accent (blue) ---- */
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --accent-darker: #1e40af;
+  --accent-deep: #1e3a8a;
+  --accent-tint: #eff4fe;
+
+  /* ---- Status ---- */
+  --status-blue-fg: #2563eb;
+  --status-blue-bg: #eff4fe;
+  --status-green-fg: #059669;
+  --status-green-bg: #ecfdf5;
+  --status-amber-fg: #b45309;
+  --status-amber-bg: #fffbeb;
+  --status-red-fg: #dc2626;
+  --status-red-bg: #fef2f2;
+  --status-gray-fg: #6b7280;
+  --status-gray-bg: #f3f4f6;
+  --status-gray-muted-fg: #9ca3af;
+
+  /* ---- Alerts ---- */
+  --alert-red-bg: #fef2f2;
+  --alert-red-text: #991b1b;
+  --alert-red-border: #fecaca;
+
+  /* ---- Chart palette ---- */
+  --chart-blue-primary: #2563eb;
+  --chart-blue-peak: #1d4ed8;
+  --chart-blue-light: #60a5fa;
+  --chart-green: #10b981;
+  --chart-green-chip: #d1fae5;
+  --chart-amber: #f59e0b;
+  --chart-red: #ef4444;
+  --chart-red-chip: #fee2e2;
+  --chart-gray-track: #eef1f6;
+  --chart-grid: #e5e7eb;
+  --chart-axis: #9ca3af;
+  --star-filled: #f59e0b;
+  --star-empty: #e5e7eb;
+
+  /* ---- Borders ---- */
+  --border-default: #e8ebf0;
+  --border-subtle: #f1f3f7;
+  --border-divider: #d7dce5;
+  --border-kpi-hover: #c7d7fb;
+
+  /* ---- Gradients ---- */
+  --gradient-logo: linear-gradient(135deg, #2563eb, #1e40af);
+  --gradient-kpi-highlight: linear-gradient(135deg, #2563eb, #1d4ed8);
+
+  /* ---- Runtime ---- */
+  --ws-accent: var(--accent);
+
+  /* ---- Typography ---- */
+  --font-display: var(--font-plus-jakarta-sans), "Plus Jakarta Sans", sans-serif;
+  --font-body: var(--font-plus-jakarta-sans), "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-body);
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 800;
+
+  --fs-xs: 10px;
+  --fs-xs-plus: 10.5px;
+  --fs-sm: 11px;
+  --fs-sm-plus: 11.5px;
+  --fs-base-minus: 12px;
+  --fs-base: 12.5px;
+  --fs-md-minus: 13px;
+  --fs-md: 13.5px;
+  --fs-md-plus: 14px;
+  --fs-lg-minus: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --fs-3xl: 24px;
+  --fs-4xl: 34px;
+  --fs-5xl: 46px;
+  --fs-6xl: 52px;
+
+  --ls-heading: -0.01em;
+  --ls-h1: -0.02em;
+  --ls-nav-label: 0.08em;
+  --ls-table-head: 0.04em;
+
+  --lh-tight: 1;
+  --lh-title: 1.25;
+  --lh-subtitle: 1.4;
+  --lh-project: 1.35;
+  --lh-body: 1.5;
+
+  /* ---- Spacing ---- */
+  --gap-section: 15px;
+  --gap-kpi: 13px;
+  --gap-chip: 13px;
+  --gap-grid: 15px;
+  --gap-card-header: 12px;
+  --gap-filter: 9px;
+  --gap-pagination: 8px;
+  --gap-legend-v: 11px;
+  --gap-legend-h: 9px;
+
+  --ws-card-pad: 20px;
+  --pad-kpi: 17px 19px;
+  --pad-header: 24px 30px 0;
+  --pad-scroll: 0 30px 30px;
+  --pad-sidebar-header: 22px 20px 18px;
+  --pad-nav: 10px 12px;
+  --pad-pill: 3px 11px;
+  --pad-pill-sm: 2px 9px;
+  --pad-btn: 9px 15px;
+  --pad-search: 10px 16px;
+  --pad-filter-select: 8px 11px;
+  --pad-alert: 9px 13px;
+  --pad-row-item: 11px 14px;
+
+  --size-icon-btn: 42px;
+  --size-pgbtn: 26px;
+  --size-logo-box: 38px;
+  --size-chip-icon: 44px;
+  --size-sidebar: 236px;
+  --card-accent-height: 3px;
+
+  /* ---- Radius ---- */
+  --radius-sm: 7px;
+  --radius-md: 8px;
+  --radius-base: 9px;
+  --radius-card: 14px;
+  --radius-logo: 10px;
+  --radius-stage: 11px;
+  --radius-chip-icon: 12px;
+  --radius-pill: 999px;
+
+  /* ---- Shadows & Motion ---- */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-kpi-hover: 0 6px 20px rgba(37, 99, 235, 0.14);
+  --shadow-frame: 0 20px 80px rgba(0, 0, 0, 0.4);
+
+  --transition-nav: background-color 0.15s, color 0.15s;
+  --transition-kpi: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+  --transition-bar: width 0.5s ease;
+  --lift-kpi-hover: translateY(-2px);
+  --hover-brightness: brightness(0.95);
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .network-performance-scope,
+.dark.network-performance-scope {
+  --bg-outer: #030712;
+  --bg-page: #090d16;
+  --bg-card: #111827;
+  --bg-sidebar: #111827;
+  --bg-row-item: #151d2e;
+  --bg-subtle: #172033;
+  --bg-input: #111827;
+  --bg-nav-active: #1e293b;
+  --bg-hover: #1e293b;
+  --bg-disabled-cell: #131b29;
+
+  --text-primary: #f9fafb;
+  --text-secondary: #e5e7eb;
+  --text-muted: #9ca3af;
+  --text-placeholder: #6b7280;
+  --text-lightest: #4b5563;
+  --text-divider: #374151;
+
+  --border-default: #1f2937;
+  --border-subtle: #1e2838;
+  --border-divider: #374151;
+  --border-kpi-hover: #2563eb;
+}
+
+.nl-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+.nl-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-divider);
+  border-radius: 999px;
+  border: 2px solid var(--bg-page);
+}
+.nl-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-base);
+  padding: 8px 12px;
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s;
+}
+.nl-chip:hover {
+  border-color: var(--border-kpi-hover);
+}
+.nl-chip b {
+  font-weight: var(--fw-bold);
+}
+
+.nl-navbtn:hover {
+  filter: brightness(0.98);
+}

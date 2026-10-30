@@ -4,7 +4,6 @@ import { useState, useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { DASHBOARD_CONFIG } from "@/lib/dashboard-config";
 import {
   canAccessDashboard,
   type DashboardId,
@@ -115,7 +114,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "clipboardlist",
     color: "#2563EB",
     status: "active",
-    href: "http://103.76.204.104:5705/",
+    href: "/dashboard/pic-monitoring",
   },
   {
     id: "bug-tracker",
@@ -123,7 +122,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "bug",
     color: "#DC2626",
     status: "active",
-    href: "http://103.76.204.104:5710/",
+    href: "/dashboard/bug-tracker",
   },
   {
     id: "learning-growth",
@@ -131,7 +130,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "bookopen",
     color: "#0D9488",
     status: "active",
-    href: "http://103.76.204.104:5706/",
+    href: "/dashboard/learning-growth",
   },
   {
     id: "server-performance",
@@ -139,7 +138,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "activity",
     color: "#7C3AED",
     status: "active",
-    href: "http://103.76.204.104:5707/",
+    href: "/dashboard/server-performance",
   },
   {
     id: "network-performance",
@@ -147,7 +146,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "globe",
     color: "#06B6D4",
     status: "active",
-    href: "http://103.76.204.104:5708/",
+    href: "/dashboard/network-performance",
   },
   {
     id: "process-risk",
@@ -155,7 +154,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "shieldalert",
     color: "#BE185D",
     status: "active",
-    href: "http://103.76.204.104:5709/",
+    href: "/dashboard/process-risk",
   },
   {
     id: "overtime",
@@ -163,7 +162,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "clock",
     color: "#EA580C",
     status: "active",
-    href: "http://103.76.204.104:5711/",
+    href: "/dashboard/overtime",
   },
   {
     id: "it-repair-maintenance",
@@ -171,7 +170,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "wrench",
     color: "#64748B",
     status: "active",
-    href: "http://103.76.204.104:5712/",
+    href: "/dashboard/it-repair-maintenance",
   },
   {
     id: "kaldev-performance",
@@ -179,22 +178,12 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "code",
     color: "#10B981",
     status: "active",
-    href: "http://103.76.204.104:5713/",
+    href: "/dashboard/kaldev-performance",
   },
 ];
 
 export function getIssuerBaseUrl(): string {
-  if (typeof window !== "undefined") {
-    const { protocol, hostname, port } = window.location;
-    if (port === "5703") {
-      return "";
-    }
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return `${protocol}//${hostname}:3000`;
-    }
-    return `${protocol}//${hostname}:5703`;
-  }
-  return "http://103.76.204.104:5703";
+  return "";
 }
 
 const emptySubscribe = () => () => {};
@@ -230,23 +219,13 @@ export default function BrowseDashboardModal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const issuerBase = getIssuerBaseUrl();
-    const url = issuerBase ? `${issuerBase}/api/auth/me` : "/api/auth/me";
-    fetch(url, { credentials: "include" })
+    fetch("/api/auth/me", { credentials: "include", cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         setAuthData(data);
         setLoading(false);
       })
-      .catch(() => {
-        fetch("/api/auth/me", { credentials: "include" })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            setAuthData(data);
-            setLoading(false);
-          })
-          .catch(() => setLoading(false));
-      });
+      .catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -265,32 +244,36 @@ export default function BrowseDashboardModal({
   const userDivision = (user?.codeDivision || "").toUpperCase().trim();
   const isItDivision = userDivision === "DIV-WSS" || userDivision === "DIV-IT";
 
+  const permissions = new Set(access?.permissions ?? []);
+  const isSuperAdmin =
+    permissions.has("*") ||
+    access?.roleKey === "super_admin" ||
+    access?.roleKey === "super-admin" ||
+    access?.roleKey === "it-admin" ||
+    access?.roleKey === "it-product";
+
   // Role staff, branch-manager, regional-head, maupun management standar TIDAK melihat Access Management
   const isRestrictedRole =
-    access?.roleKey === "staff" ||
-    access?.roleKey === "branch-manager" ||
-    access?.roleKey === "regional-head" ||
-    access?.roleKey === "management";
+    !isSuperAdmin &&
+    (access?.roleKey === "staff" ||
+      access?.roleKey === "branch-manager" ||
+      access?.roleKey === "regional-head" ||
+      access?.roleKey === "management");
 
-  const permissions = new Set(access?.permissions ?? []);
   const hasAccessManagementPerm =
+    isSuperAdmin ||
     permissions.has("access.users.manage") ||
     permissions.has("access.roles.manage") ||
     permissions.has("access.audit.view");
 
   const canAccessManagement =
-    !isRestrictedRole &&
-    (hasAccessManagementPerm ||
-      access?.roleKey === "it-product" ||
-      access?.roleKey === "it-admin" ||
-      user?.nik === "INT001" ||
-      user?.username?.toLowerCase() === "int001" ||
-      (role === "internal" && isItDivision));
-
-  const issuerBase = getIssuerBaseUrl();
-  const accessHref = issuerBase
-    ? `${issuerBase}/dashboard/access/users`
-    : "/dashboard/access/users";
+    isSuperAdmin ||
+    (!isRestrictedRole &&
+      (hasAccessManagementPerm ||
+        user?.nik === "INT001" ||
+        user?.username?.toLowerCase() === "int001" ||
+        (role === "internal" && isItDivision)));
+  const accessHref = "/dashboard/access/users";
 
   const dashboardAllowList = Array.isArray(user?.allowedDashboards)
     ? [...user.allowedDashboards, "it-repair-maintenance", "kaldev-performance"]
@@ -313,6 +296,7 @@ export default function BrowseDashboardModal({
   const allowedItems = loading
     ? []
     : catalogWithAccess.filter((it) => {
+        if (isSuperAdmin) return true;
         if (
           it.id === "bug-tracker" &&
           !["it-admin", "it-product"].includes((access?.roleKey ?? "").trim().toLowerCase())
@@ -333,10 +317,6 @@ export default function BrowseDashboardModal({
 
   if (!mounted) return null;
 
-  const currentPort = typeof window !== "undefined" ? window.location.port : "";
-  const currentPath =
-    typeof window !== "undefined" ? window.location.pathname : "";
-  const isAccessPage = currentPath.startsWith("/dashboard/access");
 
   return createPortal(
     <div
@@ -381,20 +361,47 @@ export default function BrowseDashboardModal({
         <div className="flex-1 overflow-y-auto px-3 pb-4 pt-3 sm:px-6 sm:pb-5">
           <div className="flex flex-col gap-1.5">
             {filteredItems.map((it) => {
-              const isAccessMgmt = it.id === "access-management";
-              const isHelpdeskCurrent = it.id === "helpdesk" && pathname.startsWith("/dashboard/helpdesk");
-              const isAssetPmCurrent = it.id === "asset-pm" && pathname.startsWith("/dashboard/asset-maintenance");
-              const isCurrent = isAccessMgmt
-                ? isAccessPage
-                : isHelpdeskCurrent ||
-                  isAssetPmCurrent ||
-                  (!isAccessPage &&
-                    (it.name === DASHBOARD_CONFIG.catalogName ||
-                      Boolean(
-                        it.href &&
-                          currentPort &&
-                          it.href.includes(`:${currentPort}/`),
-                      )));
+              const isHelpdeskCurrent =
+                it.id === "helpdesk" &&
+                (pathname.startsWith("/dashboard/helpdesk") || pathname === "/dashboard");
+              const isAssetPmCurrent =
+                it.id === "asset-pm" && pathname.startsWith("/dashboard/asset-maintenance");
+              const isAccessCurrent =
+                it.id === "access-management" &&
+                (pathname.startsWith("/dashboard/access") ||
+                  pathname.startsWith("/dashboard/access-management"));
+              const isNetworkPerformanceCurrent =
+                it.id === "network-performance" &&
+                pathname.startsWith("/dashboard/network-performance");
+              const isPicMonitoringCurrent =
+                it.id === "pic-monitoring" &&
+                pathname.startsWith("/dashboard/pic-monitoring");
+              const isServerPerformanceCurrent =
+                it.id === "server-performance" &&
+                pathname.startsWith("/dashboard/server-performance");
+              const isProcessRiskCurrent =
+                it.id === "process-risk" &&
+                pathname.startsWith("/dashboard/process-risk");
+              const isBugTrackerCurrent =
+                it.id === "bug-tracker" &&
+                pathname.startsWith("/dashboard/bug-tracker");
+              const isLearningGrowthCurrent =
+                it.id === "learning-growth" &&
+                pathname.startsWith("/dashboard/learning-growth");
+              const isItRepairCurrent =
+                it.id === "it-repair-maintenance" &&
+                pathname.startsWith("/dashboard/it-repair-maintenance");
+              const isCurrent =
+                isHelpdeskCurrent ||
+                isAssetPmCurrent ||
+                isAccessCurrent ||
+                isNetworkPerformanceCurrent ||
+                isPicMonitoringCurrent ||
+                isServerPerformanceCurrent ||
+                isProcessRiskCurrent ||
+                isBugTrackerCurrent ||
+                isLearningGrowthCurrent ||
+                isItRepairCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (

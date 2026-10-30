@@ -11,6 +11,30 @@ export async function GET(req: Request) {
     .find((item) => item.startsWith(`${AUTH_COOKIE_NAME}=`))
     ?.split("=")[1];
 
+  const isSkipAuth =
+    (process.env.SKIP_AUTH === "true" ||
+      process.env.NEXT_PUBLIC_SKIP_AUTH === "true" ||
+      process.env.DISABLE_AUTH === "true") &&
+    process.env.NODE_ENV !== "production";
+
+  if (isSkipAuth && !token) {
+    return NextResponse.json({
+      user: {
+        id: "dev-local",
+        nik: "DEV-LOCAL",
+        username: "dev",
+        name: "Developer (Auth Skipped)",
+        role: "management",
+        dataScope: { all: true },
+      },
+      access: {
+        status: "active",
+        roleKey: "super_admin",
+        roleName: "Super Admin",
+        permissions: ["*"],
+      },
+    });
+  }
   if (!token) {
     return NextResponse.json(
       {
@@ -38,7 +62,17 @@ export async function GET(req: Request) {
   const issuer = await getIssuerAccess(token);
   if (issuer && issuer.user.nik === user.nik) {
     return NextResponse.json(
-      { user: issuer.user, access: issuer.access },
+      {
+        user: {
+          ...user,
+          ...issuer.user,
+          name: (issuer.user.name as string | undefined) || user.name,
+          codeDivision:
+            (issuer.user.codeDivision as string | undefined) ||
+            user.codeDivision,
+        },
+        access: issuer.access,
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   }

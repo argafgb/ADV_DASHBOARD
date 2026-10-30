@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { matchesDetailIdentity } from "@/lib/async-view-state";
 import { fmt } from "@/lib/utils";
@@ -89,9 +90,17 @@ export default function MonthlyCellDetailModal({
 
   const categories = currentDetail ? currentDetail.categories : [];
 
-  return (
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || typeof document === "undefined") return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in-0 duration-200"
       onClick={onClose}
     >
       <div
@@ -371,6 +380,7 @@ export default function MonthlyCellDetailModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -36,8 +36,24 @@ export function canViewAssetPmMenu(
   permissions: readonly string[] | undefined,
 ): boolean {
   if (permissions === undefined) return true;
-  const required = menuPermissionForPath(pathname);
-  return typeof required === "string" && permissions.includes(required);
+  if (permissions.includes("*")) return true;
+
+  if (
+    !pathname.startsWith("/dashboard/asset-maintenance") &&
+    pathname !== "/dashboard"
+  ) {
+    return true;
+  }
+
+  const match = ASSET_PM_MENU_ROUTES.find(({ path }) =>
+    path === "/dashboard"
+      ? pathname === path
+      : pathname === path || pathname.startsWith(`${path}/`),
+  );
+
+  if (!match) return true;
+  if (match.permission === null) return true;
+  return permissions.includes(match.permission);
 }
 
 export function firstAllowedAssetPmPath(permissions: readonly string[]): string | null {

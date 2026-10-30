@@ -34,6 +34,13 @@ const DEFAULT_TAGS = [
   "asset-warranty-invalid",
   "device-requests",
   "warehouse-stock",
+  "pic-dashboard-projects",
+  "kaldev-overview",
+  "kaldev-attention",
+  "kaldev-projects",
+  "kaldev-team",
+  "kaldev-filter-options",
+  "last-synced-at",
 ];
 
 function isAuthorized(req: NextRequest): boolean {

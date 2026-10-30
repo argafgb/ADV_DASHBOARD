@@ -177,8 +177,41 @@ async function authenticateDct(
           )
           AND h.IsAktif = 'Y'
           AND ISNULL(u.IsLocked, 0) = 0
-          AND CONVERT(VARCHAR(100), DecryptByPassPhrase('ADV' + ISNULL(LEFT(u.ID_Employee, 4), '0') + '8', CONVERT(VARBINARY(MAX), u.Password, 1)))
-              = @Password COLLATE Latin1_General_BIN2;
+          AND (
+            (
+              u.PasswordHash IS NOT NULL
+              AND u.PasswordHash COLLATE SQL_Latin1_General_CP1_CS_AS = LOWER(
+                CONVERT(
+                  VARCHAR(50),
+                  HASHBYTES(
+                    'SHA2_512',
+                    LOWER(
+                      CONVERT(
+                        VARCHAR(50),
+                        HASHBYTES(
+                          'SHA2_512',
+                          CONVERT(VARCHAR(50), @Password) + CONVERT(VARCHAR(50), u.NIK)
+                        ),
+                        2
+                      )
+                    ) + CONVERT(VARCHAR(50), u.NIK)
+                  ),
+                  2
+                )
+              ) COLLATE SQL_Latin1_General_CP1_CS_AS
+            )
+            OR (
+              u.Password IS NOT NULL
+              AND CONVERT(
+                VARCHAR(100),
+                DecryptByPassPhrase(
+                  'ADV' + ISNULL(LEFT(u.ID_Employee, 4), '0') + '8',
+                  TRY_CONVERT(VARBINARY(MAX), u.Password, 1)
+                )
+              ) = @Password COLLATE Latin1_General_BIN2
+            )
+          )
+        ORDER BY CASE WHEN u.NIK = @Identifier THEN 0 ELSE 1 END, u.NIK DESC;
       `);
 
     row = result.recordset?.[0];

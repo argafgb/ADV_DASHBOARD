@@ -61,6 +61,39 @@ export function RechartsTip({
 }
 
 /**
+ * Komponen reusable untuk chart performa server yang menggunakan Recharts.
+ */
+export function CompactChartTooltip({
+  active,
+  payload,
+  label,
+  unit = "",
+}: {
+  active?: boolean;
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  payload?: any[];
+  label?: string;
+  unit?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <RechartsTip
+      title={label}
+      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+      rows={payload.map((entry: any) => ({
+        color: entry.color || entry.stroke || entry.fill,
+        label: entry.name || entry.dataKey,
+        value: `${
+          typeof entry.value === "number"
+            ? entry.value.toLocaleString("id-ID")
+            : entry.value ?? "–"
+        }${unit ? ` ${unit}` : ""}`,
+      }))}
+    />
+  );
+}
+
+/**
  * Tooltip melayang untuk chart SVG buatan sendiri. Koordinat dalam piksel
  * viewport, sama seperti `S.ratioTip` di mockup.
  */

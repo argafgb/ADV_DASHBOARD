@@ -1,0 +1,8 @@
+/* Scoped CSS for PIC Monitoring Dashboard */
+.pic-monitoring-scope [data-tip] {
+  transition: opacity 150ms ease;
+}
+
+.pic-monitoring-scope [data-tip-dim] {
+  opacity: 0.45;
+}
