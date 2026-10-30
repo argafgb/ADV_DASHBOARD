@@ -115,7 +115,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "clipboardlist",
     color: "#2563EB",
     status: "active",
-    href: "http://103.76.204.104:5705/",
+    href: "/dashboard/pic-monitoring",
   },
   {
     id: "bug-tracker",
@@ -394,11 +394,15 @@ export default function BrowseDashboardModal({
               const isNetworkPerformanceCurrent =
                 it.id === "network-performance" &&
                 pathname.startsWith("/dashboard/network-performance");
+              const isPicMonitoringCurrent =
+                it.id === "pic-monitoring" &&
+                pathname.startsWith("/dashboard/pic-monitoring");
               const isCurrent =
                 isHelpdeskCurrent ||
                 isAssetPmCurrent ||
                 isAccessCurrent ||
-                isNetworkPerformanceCurrent;
+                isNetworkPerformanceCurrent ||
+                isPicMonitoringCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (

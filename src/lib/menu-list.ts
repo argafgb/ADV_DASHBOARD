@@ -17,6 +17,10 @@ import {
   History,
   BarChart2,
   Server,
+  FolderKanban,
+  GitBranch,
+  Clock,
+  Tag,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -224,6 +228,72 @@ export function canViewNetworkPerformanceMenu(
   return permissions.includes(perm);
 }
 
+export const picMonitoringMenuList: Menu[] = [
+  {
+    href: "/dashboard/pic-monitoring",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/pic-monitoring/projects",
+    label: "Projects",
+    icon: FolderKanban,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/pic-monitoring/pipelines",
+    label: "Pipelines",
+    icon: GitBranch,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/pic-monitoring/sla",
+    label: "Milestone & SLA",
+    icon: Clock,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/pic-monitoring/kategori",
+    label: "Kategori & Divisi",
+    icon: Tag,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/pic-monitoring/sync-log",
+    label: "Sync Log",
+    icon: History,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const PIC_MONITORING_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/pic-monitoring": "menu.pic-monitoring.overview.view",
+  "/dashboard/pic-monitoring/projects": "menu.pic-monitoring.project-list.view",
+  "/dashboard/pic-monitoring/pipelines": "menu.pic-monitoring.pipelines.view",
+  "/dashboard/pic-monitoring/sla": "menu.pic-monitoring.milestone-sla.view",
+  "/dashboard/pic-monitoring/kategori": "menu.pic-monitoring.kategori-divisi.view",
+  "/dashboard/pic-monitoring/sync-log": "dashboard.pic-monitoring.view",
+};
+
+export function canViewPicMonitoringMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/pic-monitoring")) return true;
+  const perm = PIC_MONITORING_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -244,6 +314,9 @@ export function getMenuList(
       if (!canViewNetworkPerformanceMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewPicMonitoringMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -252,6 +325,7 @@ export function getMenuList(
         menu.href !== "/dashboard/asset-maintenance" &&
         menu.href !== "/dashboard/helpdesk" &&
         menu.href !== "/dashboard/network-performance" &&
+        menu.href !== "/dashboard/pic-monitoring" &&
         pathname.startsWith(menu.href);
 
       return {

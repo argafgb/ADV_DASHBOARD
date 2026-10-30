@@ -1,0 +1,4 @@
+export const PIC_DASHBOARD_PROJECTS_CACHE_KEY = "pic-dashboard-projects";
+
+export const PIC_DASHBOARD_PROJECTS_CACHE_TAG =
+  PIC_DASHBOARD_PROJECTS_CACHE_KEY;
