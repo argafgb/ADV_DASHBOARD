@@ -34,6 +34,7 @@ const DEFAULT_TAGS = [
   "asset-warranty-invalid",
   "device-requests",
   "warehouse-stock",
+  "pic-dashboard-projects",
 ];
 
 function isAuthorized(req: NextRequest): boolean {
