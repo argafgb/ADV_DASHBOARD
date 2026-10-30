@@ -170,7 +170,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "wrench",
     color: "#64748B",
     status: "active",
-    href: "http://103.76.204.104:5712/",
+    href: "/dashboard/it-repair-maintenance",
   },
   {
     id: "kaldev-performance",
@@ -408,6 +408,9 @@ export default function BrowseDashboardModal({
               const isLearningGrowthCurrent =
                 it.id === "learning-growth" &&
                 pathname.startsWith("/dashboard/learning-growth");
+              const isItRepairCurrent =
+                it.id === "it-repair-maintenance" &&
+                pathname.startsWith("/dashboard/it-repair-maintenance");
               const isCurrent =
                 isHelpdeskCurrent ||
                 isAssetPmCurrent ||
@@ -417,7 +420,8 @@ export default function BrowseDashboardModal({
                 isServerPerformanceCurrent ||
                 isProcessRiskCurrent ||
                 isBugTrackerCurrent ||
-                isLearningGrowthCurrent;
+                isLearningGrowthCurrent ||
+                isItRepairCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (
