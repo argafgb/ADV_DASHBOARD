@@ -155,7 +155,7 @@ const DASHBOARD_CATALOG: DashboardCatalogItem[] = [
     icon: "shieldalert",
     color: "#BE185D",
     status: "active",
-    href: "http://103.76.204.104:5709/",
+    href: "/dashboard/process-risk",
   },
   {
     id: "overtime",
@@ -400,13 +400,17 @@ export default function BrowseDashboardModal({
               const isServerPerformanceCurrent =
                 it.id === "server-performance" &&
                 pathname.startsWith("/dashboard/server-performance");
+              const isProcessRiskCurrent =
+                it.id === "process-risk" &&
+                pathname.startsWith("/dashboard/process-risk");
               const isCurrent =
                 isHelpdeskCurrent ||
                 isAssetPmCurrent ||
                 isAccessCurrent ||
                 isNetworkPerformanceCurrent ||
                 isPicMonitoringCurrent ||
-                isServerPerformanceCurrent;
+                isServerPerformanceCurrent ||
+                isProcessRiskCurrent;
               const isActive = it.status === "active" && !isCurrent;
 
               return (

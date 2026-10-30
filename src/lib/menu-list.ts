@@ -24,6 +24,7 @@ import {
   Activity,
   Mail,
   Database,
+  Boxes,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -355,6 +356,40 @@ export function canViewServerPerformanceMenu(
   return permissions.includes(perm);
 }
 
+export const processRiskMenuList: Menu[] = [
+  {
+    href: "/dashboard/process-risk",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/process-risk/program",
+    label: "Program",
+    icon: Boxes,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const PROCESS_RISK_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/process-risk": "menu.process-risk.overview.view",
+  "/dashboard/process-risk/program": "menu.process-risk.program.view",
+};
+
+export function canViewProcessRiskMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/process-risk")) return true;
+  const perm = PROCESS_RISK_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -381,6 +416,9 @@ export function getMenuList(
       if (!canViewServerPerformanceMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewProcessRiskMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -391,6 +429,7 @@ export function getMenuList(
         menu.href !== "/dashboard/network-performance" &&
         menu.href !== "/dashboard/pic-monitoring" &&
         menu.href !== "/dashboard/server-performance" &&
+        menu.href !== "/dashboard/process-risk" &&
         pathname.startsWith(menu.href);
 
       return {
