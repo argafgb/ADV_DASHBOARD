@@ -21,6 +21,9 @@ import {
   GitBranch,
   Clock,
   Tag,
+  Activity,
+  Mail,
+  Database,
 } from "lucide-react";
 import { canViewAssetPmMenu } from "@/lib/auth/menu-access";
 import { getDashboardForPath } from "./dashboard-registry";
@@ -294,6 +297,64 @@ export function canViewPicMonitoringMenu(
   return permissions.includes(perm);
 }
 
+export const serverPerformanceMenuList: Menu[] = [
+  {
+    href: "/dashboard/server-performance",
+    label: "Overview",
+    icon: LayoutGrid,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/server-performance/dct-performance",
+    label: "DCT Performance",
+    icon: Activity,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/server-performance/email-performance",
+    label: "Email Performance",
+    icon: Mail,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/server-performance/cencon-performance",
+    label: "Cencon Performance",
+    icon: Server,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+  {
+    href: "/dashboard/server-performance/centran-performance",
+    label: "Centran Performance",
+    icon: Database,
+    submenus: [],
+    allowedRoles: ["management", "internal"],
+  },
+];
+
+const SERVER_PERFORMANCE_MENU_PERMISSIONS: Record<string, string> = {
+  "/dashboard/server-performance": "menu.server-performance.overview.view",
+  "/dashboard/server-performance/dct-performance": "menu.server-performance.dct-performance.view",
+  "/dashboard/server-performance/email-performance": "menu.server-performance.email-performance.view",
+  "/dashboard/server-performance/cencon-performance": "menu.server-performance.cencon-performance.view",
+  "/dashboard/server-performance/centran-performance": "menu.server-performance.centran-performance.view",
+};
+
+export function canViewServerPerformanceMenu(
+  pathname: string,
+  permissions: readonly string[] | undefined,
+): boolean {
+  if (permissions === undefined) return true;
+  if (permissions.includes("*")) return true;
+  if (!pathname.startsWith("/dashboard/server-performance")) return true;
+  const perm = SERVER_PERFORMANCE_MENU_PERMISSIONS[pathname];
+  if (!perm) return true;
+  return permissions.includes(perm);
+}
+
 export function getMenuList(
   pathname: string,
   role: UserRole = "management",
@@ -317,6 +378,9 @@ export function getMenuList(
       if (!canViewPicMonitoringMenu(menu.href, permissions)) {
         return false;
       }
+      if (!canViewServerPerformanceMenu(menu.href, permissions)) {
+        return false;
+      }
       return true;
     })
     .map((menu) => {
@@ -326,6 +390,7 @@ export function getMenuList(
         menu.href !== "/dashboard/helpdesk" &&
         menu.href !== "/dashboard/network-performance" &&
         menu.href !== "/dashboard/pic-monitoring" &&
+        menu.href !== "/dashboard/server-performance" &&
         pathname.startsWith(menu.href);
 
       return {

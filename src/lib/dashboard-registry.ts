@@ -4,6 +4,7 @@ import {
   accessMenuList,
   networkPerformanceMenuList,
   picMonitoringMenuList,
+  serverPerformanceMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -55,6 +56,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return picMonitoringMenuList;
     },
   },
+  "server-performance": {
+    id: "server-performance",
+    prefix: "/dashboard/server-performance",
+    title: "Server Performance Dashboard",
+    get menuList() {
+      return serverPerformanceMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -63,6 +72,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/access")) return DASHBOARD_REGISTRY["access-management"];
   if (pathname.startsWith("/dashboard/network-performance")) return DASHBOARD_REGISTRY["network-performance"];
   if (pathname.startsWith("/dashboard/pic-monitoring")) return DASHBOARD_REGISTRY["pic-monitoring"];
+  if (pathname.startsWith("/dashboard/server-performance")) return DASHBOARD_REGISTRY["server-performance"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }
