@@ -8,6 +8,7 @@ import {
   processRiskMenuList,
   bugTrackerMenuList,
   learningGrowthMenuList,
+  overtimeMenuList,
   type Menu,
 } from "./menu-list";
 
@@ -91,6 +92,14 @@ export const DASHBOARD_REGISTRY: Record<string, DashboardRegistryItem> = {
       return learningGrowthMenuList;
     },
   },
+  "overtime": {
+    id: "overtime",
+    prefix: "/dashboard/overtime",
+    title: "Overtime Analytics Dashboard",
+    get menuList() {
+      return overtimeMenuList;
+    },
+  },
 };
 
 export function getDashboardForPath(pathname: string): DashboardRegistryItem | null {
@@ -103,6 +112,7 @@ export function getDashboardForPath(pathname: string): DashboardRegistryItem | n
   if (pathname.startsWith("/dashboard/process-risk")) return DASHBOARD_REGISTRY["process-risk"];
   if (pathname.startsWith("/dashboard/bug-tracker")) return DASHBOARD_REGISTRY["bug-tracker"];
   if (pathname.startsWith("/dashboard/learning-growth")) return DASHBOARD_REGISTRY["learning-growth"];
+  if (pathname.startsWith("/dashboard/overtime")) return DASHBOARD_REGISTRY["overtime"];
   if (pathname === "/dashboard") return DASHBOARD_REGISTRY["helpdesk"];
   return null;
 }
