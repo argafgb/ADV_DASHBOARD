@@ -71,8 +71,8 @@ export function SheetMenu({ onOpenDashModal }: SheetMenuProps) {
                 src="/adv-banner.webp"
                 unoptimized
                 alt={DASHBOARD_CONFIG.brandName}
-                width={92}
-                height={28}
+                width={925}
+                height={286}
                 className="h-7 w-auto max-w-full shrink-0 object-contain"
                 priority
               />
