@@ -2,8 +2,14 @@
 
 import React, { useState, useMemo } from "react";
 import type { DashboardDataset, SanitizedProject } from "../types/types";
-import { formatPeriodLabel, monthWindowOf } from "../utils/period-filter";
-import { evaluateStageSla } from "../utils/sla-policy";
+import {
+  formatPeriodLabel,
+  formatMonthSelection,
+  monthWindowOf,
+  MONTH_OPTIONS,
+} from "../utils/period-filter";
+import { evaluateStageSla, type StageSlaEvaluation } from "../utils/sla-policy";
+import { buildMonthlyProjectPipeline, getProjectIntakeYearMonth, parseProjectDateYearMonth } from "../services/project-data";
 import { PicMonitoringModals, type ModalPayload } from "./PicMonitoringModals";
 
 interface TabOverviewProps {
@@ -38,6 +44,7 @@ interface UatItem {
 }
 
 export function TabOverview({
+  dataset,
   onNavigateToTab,
   filteredProjects = [],
   slaProjects = [],
@@ -49,17 +56,41 @@ export function TabOverview({
   const [uatTab, setUatTab] = useState<"aktif" | "riwayat">("aktif");
 
   const selectedYear = endYear || startYear || 2026;
-  const periodLabel = formatPeriodLabel(selectedYear, monthWindowOf(month));
+  const monthWindow = useMemo(() => monthWindowOf(month), [month]);
+  const periodLabel = formatPeriodLabel(selectedYear, monthWindow);
+
+  const slaPeriod = useMemo(() => ({
+    year: selectedYear,
+    months: monthWindow,
+  }), [selectedYear, monthWindow]);
 
   // 1. Projects Breakdown
   const activeProjects = useMemo(() => {
     return filteredProjects.filter((p) => {
       const st = String(p["Last Status"] || "").toLowerCase();
-      return !st.includes("canceled") && !st.includes("cancelled");
-    });
-  }, [filteredProjects]);
+      if (st.includes("canceled") || st.includes("cancelled")) return false;
 
-  const activeCount = 94;
+      if (monthWindow !== null) {
+        const intake = getProjectIntakeYearMonth(p);
+        if (intake) {
+          if (intake.year > selectedYear) return false;
+          if (intake.year === selectedYear && intake.month > monthWindow.endMonth) return false;
+        }
+        const liveDate = parseProjectDateYearMonth(
+          p["(Live) Realized in Date"] ?? p["(Live) Realized in date"],
+        );
+        if (liveDate && (st.includes("live") || st.includes("completed"))) {
+          if (
+            liveDate.year < selectedYear ||
+            (liveDate.year === selectedYear && liveDate.month < monthWindow.startMonth)
+          ) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+  }, [filteredProjects, selectedYear, monthWindow]);
 
   // Needs Attention Projects (Late / Overdue / SLA Broken)
   const needsAttentionProjects = useMemo(() => {
@@ -76,24 +107,24 @@ export function TabOverview({
     });
   }, [activeProjects]);
 
-  // 2. Milestone SLA stages (matched exactly with prototype reference & max 100%)
+  // 2. Milestone SLA stages (dynamically calculated without 2026 fallback lock)
   const stageEvaluations = useMemo<StageEvalItem[]>(() => {
     const defaultData: StageEvalItem[] = [
-      { name: "FSD SLA", pct: "80%", data: 157, ok: 126, miss: 31, rate: 80 },
-      { name: "DEV SLA", pct: "75%", data: 134, ok: 101, miss: 33, rate: 75, delta: true },
-      { name: "SIT SLA", pct: "81%", data: 134, ok: 109, miss: 25, rate: 81 },
-      { name: "UAT SLA", pct: "80%", data: 133, ok: 106, miss: 27, rate: 80 },
-      { name: "Live SLA", pct: "85%", data: 122, ok: 104, miss: 18, rate: 85 },
+      { name: "FSD SLA", pct: "0%", data: 0, ok: 0, miss: 0, rate: 0 },
+      { name: "DEV SLA", pct: "0%", data: 0, ok: 0, miss: 0, rate: 0, delta: true },
+      { name: "SIT SLA", pct: "0%", data: 0, ok: 0, miss: 0, rate: 0 },
+      { name: "UAT SLA", pct: "0%", data: 0, ok: 0, miss: 0, rate: 0 },
+      { name: "Live SLA", pct: "0%", data: 0, ok: 0, miss: 0, rate: 0 },
     ];
 
-    if (selectedYear === 2026 || !slaProjects || slaProjects.length === 0) {
+    if (!slaProjects || slaProjects.length === 0) {
       return defaultData;
     }
 
     const stageKeys = ["FSD", "DEV", "SIT", "UAT", "LIVE"] as const;
     return stageKeys.map((key, idx) => {
       try {
-        const evalResult = evaluateStageSla(slaProjects, key, selectedYear);
+        const evalResult = evaluateStageSla(slaProjects, key, slaPeriod);
         if (evalResult && evalResult.contributors > 0) {
           const rawRate = evalResult.percentage !== null ? Math.round(evalResult.percentage) : 0;
           const rate = Math.min(100, Math.max(0, rawRate));
@@ -110,13 +141,118 @@ export function TabOverview({
           };
         }
       } catch {
-        // Fallback to default
+        // Fallback
       }
       return defaultData[idx];
     });
-  }, [slaProjects, selectedYear]);
+  }, [slaProjects, slaPeriod]);
 
   const achievedStagesCount = stageEvaluations.filter((s) => s.rate >= 93).length;
+
+  // Evaluated projects calculation for KPI Card 2
+  const evaluatedProjectsData = useMemo(() => {
+    const projectSet = new Set<string>();
+    const list: SanitizedProject[] = [];
+    stageEvaluations.forEach((s) => {
+      [...(s.achievedProjects || []), ...(s.missedProjects || [])].forEach((p) => {
+        const id = p.notion_page_id || p.Ticket || p["Project Name"];
+        if (id && !projectSet.has(id)) {
+          projectSet.add(id);
+          list.push(p);
+        }
+      });
+    });
+    const totalCount = slaProjects?.length || filteredProjects.length || list.length;
+    const count = list.length;
+    const pct = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+    return {
+      count,
+      totalCount,
+      pct,
+      list,
+    };
+  }, [stageEvaluations, slaProjects, filteredProjects]);
+
+  // User satisfaction rate dynamically filtered by selectedYear and monthWindow
+  const userFeedback = useMemo(() => {
+    const targetProjects = filteredProjects.filter((p) => {
+      const cd = (p as unknown as { cleansed_data?: Record<string, unknown> }).cleansed_data ?? p;
+      let projectYear = "";
+      const ly = String(cd["LIVE SLA YEAR"] ?? (p as Record<string, unknown>)["LIVE SLA YEAR"] ?? "").trim();
+      if (/^\d{4}$/.test(ly)) projectYear = ly;
+      else {
+        const ld = String(cd["(Live) Realized in Date"] ?? (p as Record<string, unknown>)["(Live) Realized in Date"] ?? "").trim();
+        const ldm = /^(\d{4})/.exec(ld);
+        if (ldm) projectYear = ldm[1];
+        else {
+          const dy = String(cd["DEV SLA YEAR"] ?? (p as Record<string, unknown>)["DEV SLA YEAR"] ?? "").trim();
+          if (/^\d{4}$/.test(dy)) projectYear = dy;
+          else {
+            const tm = /^(\d{2})/.exec(String(p.Ticket || "").trim());
+            if (tm) projectYear = String(2000 + Number(tm[1]));
+            else {
+              const dm = /(?:19|20)\d{2}/.exec(String(cd["Project diajukan"] ?? p._year ?? ""));
+              if (dm) projectYear = dm[0];
+              else if (p.Year) projectYear = String(p.Year);
+            }
+          }
+        }
+      }
+      if (projectYear !== String(selectedYear)) return false;
+
+      // Filter month when specific month is selected
+      if (monthWindow !== null) {
+        const liveDate = parseProjectDateYearMonth(
+          cd["(Live) Realized in Date"] ??
+            (p as Record<string, unknown>)["(Live) Realized in Date"] ??
+            cd["(Live) Realized in date"],
+        );
+        if (liveDate && liveDate.year === selectedYear) {
+          if (
+            liveDate.month >= monthWindow.startMonth &&
+            liveDate.month <= monthWindow.endMonth
+          ) {
+            return true;
+          }
+        }
+        const devDate = parseProjectDateYearMonth(
+          cd["(Dev) Realized In Date"] ??
+            (p as Record<string, unknown>)["(Dev) Realized In Date"] ??
+            cd["(Dev) Realized in Date"],
+        );
+        if (devDate && devDate.year === selectedYear) {
+          if (
+            devDate.month >= monthWindow.startMonth &&
+            devDate.month <= monthWindow.endMonth
+          ) {
+            return true;
+          }
+        }
+        const intake = getProjectIntakeYearMonth(p);
+        if (intake && intake.year === selectedYear) {
+          if (
+            intake.month >= monthWindow.startMonth &&
+            intake.month <= monthWindow.endMonth
+          ) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      return true;
+    });
+
+    const fbVals = targetProjects
+      .map((p) => p._feedback)
+      .filter((f): f is number => f !== null);
+
+    const evaluated = fbVals.length;
+    const avg = evaluated > 0 ? fbVals.reduce((a, b) => a + b, 0) / evaluated : null;
+    const score = avg === null ? "-" : avg.toFixed(2);
+
+    return { score, evaluated };
+  }, [filteredProjects, selectedYear, monthWindow]);
 
   // 3. Active Pipeline Groups
   const pipelineGroups = useMemo(() => {
@@ -132,51 +268,67 @@ export function TabOverview({
       else if (st.includes("queue") || st.includes("pending")) queueProjs.push(p);
       else if (st.includes("uat")) uatProjs.push(p);
       else if (st.includes("monitoring")) monProjs.push(p);
-      else inProgProjs.push(p);
+      else if (!st.includes("live") && !st.includes("completed")) inProgProjs.push(p);
+      else monProjs.push(p);
     });
+
+    const total = inProgProjs.length + monProjs.length + queueProjs.length + uatProjs.length + holdProjs.length;
+
+    const calcPct = (count: number) => {
+      if (total === 0) return { pct: "0%", width: "0%" };
+      const p = Math.round((count / total) * 100);
+      const w = ((count / total) * 100).toFixed(1);
+      return { pct: `${p}%`, width: `${w}%` };
+    };
+
+    const inProgStats = calcPct(inProgProjs.length);
+    const monStats = calcPct(monProjs.length);
+    const queueStats = calcPct(queueProjs.length);
+    const uatStats = calcPct(uatProjs.length);
+    const holdStats = calcPct(holdProjs.length);
 
     return [
       {
         name: "In progress",
-        n: 51,
-        p: "54%",
-        w: "54.3%",
+        n: inProgProjs.length,
+        p: inProgStats.pct,
+        w: inProgStats.width,
         color: "var(--chart-blue-primary)",
         modal: "inprog" as const,
         projects: inProgProjs,
       },
       {
         name: "Monitoring",
-        n: 17,
-        p: "18%",
-        w: "18.1%",
+        n: monProjs.length,
+        p: monStats.pct,
+        w: monStats.width,
         color: "var(--chart-green)",
         modal: "group" as const,
         projects: monProjs,
       },
       {
         name: "Queue",
-        n: 16,
-        p: "17%",
-        w: "17.0%",
+        n: queueProjs.length,
+        p: queueStats.pct,
+        w: queueStats.width,
         color: "var(--chart-amber)",
         modal: "group" as const,
         projects: queueProjs,
       },
       {
         name: "UAT",
-        n: 7,
-        p: "7%",
-        w: "7.4%",
+        n: uatProjs.length,
+        p: uatStats.pct,
+        w: uatStats.width,
         color: "var(--chart-blue-light)",
         modal: "group" as const,
         projects: uatProjs,
       },
       {
         name: "Hold",
-        n: 3,
-        p: "3%",
-        w: "3.2%",
+        n: holdProjs.length,
+        p: holdStats.pct,
+        w: holdStats.width,
         color: "var(--chart-neutral)",
         modal: "group" as const,
         projects: holdProjs,
@@ -184,33 +336,196 @@ export function TabOverview({
     ];
   }, [activeProjects]);
 
-  // 4. Monthly Intake vs Go-Live Data for Line Chart
-  const monthlyData = [
-    { name: "Jan", full: "Januari 2026", x: 56, intake: 16, golive: 7, left: "3.00%", width: "10.00%" },
-    { name: "Feb", full: "Februari 2026", x: 126, intake: 21, golive: 6, left: "13.00%", width: "10.00%" },
-    { name: "Mar", full: "Maret 2026", x: 196, intake: 17, golive: 10, left: "23.00%", width: "10.00%" },
-    { name: "Apr", full: "April 2026", x: 266, intake: 16, golive: 5, left: "33.00%", width: "10.00%" },
-    { name: "Mei", full: "Mei 2026", x: 336, intake: 14, golive: 21, left: "43.00%", width: "10.00%" },
-    { name: "Jun", full: "Juni 2026", x: 406, intake: 12, golive: 12, left: "53.00%", width: "10.00%" },
-    { name: "Jul", full: "Juli 2026", x: 476, intake: 20, golive: 21, left: "63.00%", width: "10.00%" },
-    { name: "Agu", full: "Agustus 2026", x: 546, intake: 24, golive: 17, left: "73.00%", width: "10.00%" },
-    { name: "Sep", full: "September 2026", x: 616, intake: 18, golive: 12, left: "83.00%", width: "10.00%" },
-    { name: "Okt", full: "Oktober 2026", x: 680, intake: 7, golive: 12, left: "92.14%", width: "7.86%" },
-  ];
+  const activeCount = useMemo(() => {
+    return pipelineGroups.reduce((acc, g) => acc + g.n, 0);
+  }, [pipelineGroups]);
 
-  // 5. UAT Rescheduled List (matches prototype Aktif 8)
-  const uatRescheduledList = useMemo<UatItem[]>(() => {
+  // 4. Monthly Intake vs Go-Live Data for Line Chart
+  const monthlyPipeline = useMemo(() => {
+    return buildMonthlyProjectPipeline(filteredProjects, selectedYear, 1, 12);
+  }, [filteredProjects, selectedYear]);
+
+  const monthlyData = useMemo(() => {
+    const months = monthlyPipeline.months;
+    const count = months.length;
+    return months.map((m, idx) => {
+      const monthOption = MONTH_OPTIONS[m - 1];
+      const intake = monthlyPipeline.intakeByMonth[m]?.length || 0;
+      const golive = monthlyPipeline.liveByMonth[m]?.length || 0;
+      const x = count <= 1 ? 361 : Math.round(32 + (idx + 0.5) * (658 / count));
+      const left = `${((idx / count) * 100).toFixed(2)}%`;
+      const width = `${((1 / count) * 100).toFixed(2)}%`;
+
+      return {
+        monthNum: m,
+        name: monthOption?.shortLabel || `Bln ${m}`,
+        full: `${monthOption?.label || `Bulan ${m}`} ${selectedYear}`,
+        intake,
+        golive,
+        x,
+        left,
+        width,
+      };
+    });
+  }, [monthlyPipeline, selectedYear]);
+
+  const totalIntake = useMemo(() => {
+    if (monthWindow !== null) {
+      return monthlyData
+        .filter((m) => m.monthNum >= monthWindow.startMonth && m.monthNum <= monthWindow.endMonth)
+        .reduce((acc, m) => acc + m.intake, 0);
+    }
+    return monthlyData.reduce((acc, m) => acc + m.intake, 0);
+  }, [monthlyData, monthWindow]);
+
+  const totalGoLive = useMemo(() => {
+    if (monthWindow !== null) {
+      return monthlyData
+        .filter((m) => m.monthNum >= monthWindow.startMonth && m.monthNum <= monthWindow.endMonth)
+        .reduce((acc, m) => acc + m.golive, 0);
+    }
+    return monthlyData.reduce((acc, m) => acc + m.golive, 0);
+  }, [monthlyData, monthWindow]);
+
+  const goLivePct = useMemo(() => {
+    if (totalIntake === 0) return 0;
+    return Math.round((totalGoLive / totalIntake) * 100);
+  }, [totalGoLive, totalIntake]);
+
+  // Scalable SVG Coordinates
+  const maxY = useMemo(() => {
+    const peak = Math.max(...monthlyData.map((m) => Math.max(m.intake, m.golive)), 0);
+    if (peak <= 0) return 24;
+    const step = Math.max(6, Math.ceil(peak / 4));
+    return step * 4;
+  }, [monthlyData]);
+
+  const yTicks = useMemo(() => {
     return [
-      { name: "Penyesuaian Validasi Report Custom ATM", status: "Live On Monitoring", tone: "green", n: "3" },
-      { name: "Digitalisasi Form Sertifikasi Petugas", status: "Live On Queue", tone: "amber", n: "1" },
-      { name: "Setting Report Custom Rekonsiliasi Cash Pickup", status: "Live On Monitoring", tone: "green", n: "1" },
-      { name: "Approval Digital Perubahan Data Approval PMA Lanjutan", status: "UAT On Progress", tone: "blue", n: "1" },
-      { name: "Tambah Filter Pencarian Kontrak Digital", status: "Live On Monitoring", tone: "green", n: "1" },
-      { name: "Perbaikan Flow Approval Reimbursement Online", status: "Live On Monitoring", tone: "green", n: "1" },
-      { name: "Integrasi API Absensi Cabang dengan Core System", status: "Live On Queue", tone: "amber", n: "1" },
-      { name: "Redesign Alur Dashboard Treasury", status: "Change Request On Progress", tone: "blue", n: "1" },
+      { val: maxY, y: 16 },
+      { val: Math.round(maxY * 0.75), y: 62 },
+      { val: Math.round(maxY * 0.5), y: 108 },
+      { val: Math.round(maxY * 0.25), y: 154 },
+      { val: 0, y: 200 },
     ];
-  }, []);
+  }, [maxY]);
+
+  const getYPos = (val: number) => {
+    if (maxY <= 0) return 200;
+    const ratio = Math.min(1, Math.max(0, val / maxY));
+    return 200 - ratio * (200 - 16);
+  };
+
+  const intakePoints = useMemo(() => {
+    return monthlyData.map((m) => ({ x: m.x, y: Number(getYPos(m.intake).toFixed(1)) }));
+  }, [monthlyData, maxY]);
+
+  const golivePoints = useMemo(() => {
+    return monthlyData.map((m) => ({ x: m.x, y: Number(getYPos(m.golive).toFixed(1)) }));
+  }, [monthlyData, maxY]);
+
+  const intakePolyline = useMemo(
+    () => intakePoints.map((p) => `${p.x},${p.y}`).join(" "),
+    [intakePoints],
+  );
+  const golivePolyline = useMemo(
+    () => golivePoints.map((p) => `${p.x},${p.y}`).join(" "),
+    [golivePoints],
+  );
+
+  // 5. UAT Rescheduled Lists
+  const getStatusTone = (status: string): "green" | "blue" | "amber" | "red" | "gray" => {
+    const st = status.toLowerCase();
+    if (st.includes("monitoring") || st.includes("live") || st.includes("done")) return "green";
+    if (st.includes("progress") || st.includes("uat")) return "blue";
+    if (st.includes("queue") || st.includes("pending")) return "amber";
+    if (st.includes("hold") || st.includes("cancel")) return "gray";
+    return "blue";
+  };
+
+  const uatActiveRows = useMemo<UatItem[]>(() => {
+    return activeProjects
+      .filter((p) => Number(p["Reschedule UAT"] || 0) > 0)
+      .sort((a, b) => Number(b["Reschedule UAT"] || 0) - Number(a["Reschedule UAT"] || 0))
+      .map((p) => ({
+        name: p["Project Name"] || p.Ticket || "Untitled Project",
+        status: p["Last Status"] || "Belum diisi",
+        tone: getStatusTone(p["Last Status"] || ""),
+        n: String(p["Reschedule UAT"] || 1),
+        originalProject: p,
+      }));
+  }, [activeProjects]);
+
+  const uatHistoryRows = useMemo<UatItem[]>(() => {
+    return (filteredProjects || [])
+      .filter((p) => Number(p["Reschedule UAT"] || 0) > 0)
+      .sort((a, b) => Number(b["Reschedule UAT"] || 0) - Number(a["Reschedule UAT"] || 0))
+      .map((p) => ({
+        name: p["Project Name"] || p.Ticket || "Untitled Project",
+        status: p["Last Status"] || "Belum diisi",
+        tone: getStatusTone(p["Last Status"] || ""),
+        n: String(p["Reschedule UAT"] || 1),
+        originalProject: p,
+      }));
+  }, [filteredProjects]);
+
+  const uatActiveCount = uatActiveRows.length;
+  const uatHistoryCount = uatHistoryRows.length;
+  const currentUatList = useMemo(() => {
+    return uatTab === "aktif" ? uatActiveRows : uatHistoryRows;
+  }, [uatTab, uatActiveRows, uatHistoryRows]);
+
+  // 6. DEV SLA Year-on-Year comparison
+  const devSlaYoY = useMemo(() => {
+    const prevYear = selectedYear - 1;
+    const prevPeriod = { year: prevYear, months: monthWindow };
+    const currPeriod = { year: selectedYear, months: monthWindow };
+    let prevEval: StageSlaEvaluation<SanitizedProject> | null = null;
+    let currEval: StageSlaEvaluation<SanitizedProject> | null = null;
+
+    try {
+      prevEval = evaluateStageSla(slaProjects, "DEV", prevPeriod);
+    } catch {
+      // fallback
+    }
+
+    try {
+      currEval = evaluateStageSla(slaProjects, "DEV", currPeriod);
+    } catch {
+      // fallback
+    }
+
+    const prevRate = prevEval?.percentage !== null && prevEval?.percentage !== undefined
+      ? Math.round(prevEval.percentage)
+      : 0;
+    const currRate = currEval?.percentage !== null && currEval?.percentage !== undefined
+      ? Math.round(currEval.percentage)
+      : 0;
+    const diff = currRate - prevRate;
+
+    return {
+      prevYear,
+      currYear: selectedYear,
+      prevEval: {
+        data: prevEval?.contributors || 0,
+        ok: prevEval?.achieved || 0,
+        miss: prevEval?.notAchieved || 0,
+        rate: prevRate,
+        achievedProjects: prevEval?.achievedProjects || [],
+        missedProjects: prevEval?.notAchievedProjects || [],
+      },
+      currEval: {
+        data: currEval?.contributors || 0,
+        ok: currEval?.achieved || 0,
+        miss: currEval?.notAchieved || 0,
+        rate: currRate,
+        achievedProjects: currEval?.achievedProjects || [],
+        missedProjects: currEval?.notAchievedProjects || [],
+      },
+      diff,
+      isUp: diff >= 0,
+    };
+  }, [slaProjects, selectedYear, monthWindow]);
 
   return (
     <>
@@ -261,8 +576,22 @@ export function TabOverview({
               <span className="dd-kpi__label">User satisfaction rate</span>
             </div>
             <div className="dd-kpi__row">
-              <span className="dd-kpi__value">4.01</span>
-              <span className="dd-kpi__sub">63 feedback</span>
+              <span className="dd-kpi__value">
+                {userFeedback.score !== "-"
+                  ? userFeedback.score
+                  : monthWindow !== null
+                    ? "-"
+                    : dataset?.feedback?.score && dataset.feedback.score !== "Belum diisi"
+                      ? dataset.feedback.score
+                      : "-"}
+              </span>
+              <span className="dd-kpi__sub">
+                {userFeedback.evaluated > 0
+                  ? userFeedback.evaluated
+                  : monthWindow !== null
+                    ? 0
+                    : dataset?.feedback?.evaluated || 0} feedback
+              </span>
             </div>
           </div>
 
@@ -278,12 +607,12 @@ export function TabOverview({
                 subtitle: `Evaluasi SLA per tahap · ${selectedYear}`,
                 kpiKey: "eval",
                 kpiData: {
-                  num: "183",
-                  of: "/294",
-                  pct: "62%",
+                  num: String(evaluatedProjectsData.count),
+                  of: `/${evaluatedProjectsData.totalCount}`,
+                  pct: `${evaluatedProjectsData.pct}%`,
                   pctCls: "",
                   hasPct: true,
-                  sub: "proyek dievaluasi dari 294 terdaftar",
+                  sub: `proyek dievaluasi dari ${evaluatedProjectsData.totalCount} terdaftar`,
                   note: "Jumlah data yang dievaluasi di tiap tahap. Klik tahap untuk melihat proyek not achieved.",
                   rows: stageEvaluations.map((s, idx) => ({
                     name: s.name,
@@ -332,7 +661,7 @@ export function TabOverview({
               <span className="dd-kpi__label">Evaluated projects</span>
             </div>
             <div className="dd-kpi__row">
-              <span className="dd-kpi__value">183</span>
+              <span className="dd-kpi__value">{evaluatedProjectsData.count}</span>
               <span className="dd-kpi__sub">proyek</span>
             </div>
           </button>
@@ -349,25 +678,22 @@ export function TabOverview({
                 subtitle: `Realisasi go-live per bulan · ${selectedYear}`,
                 kpiKey: "golive",
                 kpiData: {
-                  num: "123",
-                  of: "/165",
-                  pct: "75%",
-                  pctCls: "kpct--green",
+                  num: String(totalGoLive),
+                  of: `/${totalIntake}`,
+                  pct: `${goLivePct}%`,
+                  pctCls: goLivePct >= 70 ? "kpct--green" : "kpct--amber",
                   hasPct: true,
-                  sub: "go-live dibanding 165 intake 2026",
-                  note: "Go-live per bulan dari Januari sampai Oktober 2026.",
-                  rows: [
-                    { name: "Januari", val: "7 go-live", w: "33.3%", color: "var(--chart-green)" },
-                    { name: "Februari", val: "6 go-live", w: "28.6%", color: "var(--chart-green)" },
-                    { name: "Maret", val: "10 go-live", w: "47.6%", color: "var(--chart-green)" },
-                    { name: "April", val: "5 go-live", w: "23.8%", color: "var(--chart-green)" },
-                    { name: "Mei", val: "21 go-live", w: "100%", color: "var(--chart-green)" },
-                    { name: "Juni", val: "12 go-live", w: "57.1%", color: "var(--chart-green)" },
-                    { name: "Juli", val: "21 go-live", w: "100%", color: "var(--chart-green)" },
-                    { name: "Agustus", val: "17 go-live", w: "81.0%", color: "var(--chart-green)" },
-                    { name: "September", val: "12 go-live", w: "57.1%", color: "var(--chart-green)" },
-                    { name: "Oktober", val: "12 go-live", w: "57.1%", color: "var(--chart-green)" },
-                  ],
+                  sub: `go-live dibanding ${totalIntake} intake ${selectedYear}`,
+                  note: `Go-live per bulan tahun ${selectedYear}.`,
+                  rows: monthlyData.map((m) => {
+                    const maxGolive = Math.max(...monthlyData.map((d) => d.golive), 1);
+                    return {
+                      name: m.full.replace(` ${selectedYear}`, ""),
+                      val: `${m.golive} go-live`,
+                      w: `${Math.round((m.golive / maxGolive) * 100)}%`,
+                      color: "var(--chart-green)",
+                    };
+                  }),
                   goLabel: "Buka Pipelines",
                   onGo: () => onNavigateToTab(1),
                 },
@@ -397,7 +723,7 @@ export function TabOverview({
               <span className="dd-kpi__label">Go-live this period</span>
             </div>
             <div className="dd-kpi__row">
-              <span className="dd-kpi__value">123</span>
+              <span className="dd-kpi__value">{totalGoLive}</span>
               <span className="dd-kpi__sub">proyek</span>
             </div>
           </button>
@@ -411,7 +737,7 @@ export function TabOverview({
               setActiveModal({
                 type: "needs",
                 title: "Needs attention",
-                subtitle: "18 proyek aktif melewati SLA tahap",
+                subtitle: `${needsAttentionProjects.length} proyek aktif melewati SLA tahap`,
                 needsProjects: needsAttentionProjects,
               })
             }
@@ -441,7 +767,7 @@ export function TabOverview({
             </div>
             <div className="dd-kpi__row">
               <span className="dd-kpi__value" style={{ color: "var(--status-red-fg)" }}>
-                18
+                {needsAttentionProjects.length}
               </span>
               <span className="dd-kpi__sub">proyek telat</span>
             </div>
@@ -496,7 +822,9 @@ export function TabOverview({
                     <span className="dd-sla__label" style={{ minHeight: 0 }}>
                       {s.name}
                     </span>
-                    <span className="dd-sla__period">{selectedYear}</span>
+                    <span className="dd-sla__period">
+                      {monthWindow !== null ? `${selectedYear} · ${formatMonthSelection(month)}` : selectedYear}
+                    </span>
                   </div>
                   <div className="dd-sla__value">{s.pct}</div>
                   <div className="dd-sla__track">
@@ -568,7 +896,7 @@ export function TabOverview({
                     setActiveModal({
                       type: "registry",
                       title: "Registry intake & go-live",
-                      subtitle: "Log proyek masuk dan go-live tahun 2026",
+                      subtitle: `Log proyek masuk dan go-live tahun ${selectedYear}`,
                       registryProjects: activeProjects,
                     })
                   }
@@ -585,14 +913,14 @@ export function TabOverview({
                     className="dd-chart__dot dd-chart__dot--round"
                     style={{ background: "var(--chart-green)" }}
                   />
-                  Go-live <span className="dd-chart__legendval">123</span>
+                  Go-live <span className="dd-chart__legendval">{totalGoLive}</span>
                 </span>
                 <span className="dd-chart__legenditem">
                   <span
                     className="dd-chart__dot dd-chart__dot--round"
                     style={{ background: "var(--chart-blue-primary)" }}
                   />
-                  Intake <span className="dd-chart__legendval">165</span>
+                  Intake <span className="dd-chart__legendval">{totalIntake}</span>
                 </span>
               </div>
 
@@ -601,7 +929,7 @@ export function TabOverview({
                   className="dd-line"
                   viewBox="0 0 700 226"
                   role="img"
-                  aria-label="Intake dan go-live per bulan, Januari sampai Oktober 2026"
+                  aria-label={`Intake dan go-live per bulan tahun ${selectedYear}`}
                 >
                   {/* Grid lines */}
                   <line className="dd-chart__grid" x1="32" y1="16" x2="690" y2="16" />
@@ -613,25 +941,44 @@ export function TabOverview({
 
                   {/* Y Axis text */}
                   <g textAnchor="end">
-                    <text className="dd-chart__axis" x="24" y="20">24</text>
-                    <text className="dd-chart__axis" x="24" y="66">18</text>
-                    <text className="dd-chart__axis" x="24" y="112">12</text>
-                    <text className="dd-chart__axis" x="24" y="158">6</text>
-                    <text className="dd-chart__axis" x="24" y="204">0</text>
-                  </g>
-
-                  {/* X Axis text */}
-                  <g textAnchor="middle">
-                    {monthlyData.map((m) => (
-                      <text key={m.name} className="dd-chart__axis" x={m.x} y="220">
-                        {m.name}
+                    {yTicks.map((t) => (
+                      <text key={t.y} className="dd-chart__axis" x="24" y={t.y + 4}>
+                        {t.val}
                       </text>
                     ))}
                   </g>
 
+                  {/* X Axis text */}
+                  <g textAnchor="middle">
+                    {monthlyData.map((m) => {
+                      const isSelected =
+                        monthWindow !== null &&
+                        m.monthNum >= monthWindow.startMonth &&
+                        m.monthNum <= monthWindow.endMonth;
+                      return (
+                        <text
+                          key={m.name}
+                          className="dd-chart__axis"
+                          x={m.x}
+                          y="220"
+                          style={
+                            isSelected
+                              ? {
+                                  fill: "var(--chart-blue-primary)",
+                                  fontWeight: 700,
+                                }
+                              : undefined
+                          }
+                        >
+                          {m.name}
+                        </text>
+                      );
+                    })}
+                  </g>
+
                   {/* Intake Polyline (Blue) */}
                   <polyline
-                    points="56,77.3 126,39 196,69.7 266,77.3 336,92.7 406,108 476,46.7 546,16 616,62 680,146.3"
+                    points={intakePolyline}
                     fill="none"
                     stroke="var(--chart-blue-primary)"
                     strokeWidth="2.5"
@@ -640,7 +987,7 @@ export function TabOverview({
 
                   {/* Go-Live Polyline (Green) */}
                   <polyline
-                    points="56,146.3 126,154 196,123.3 266,161.7 336,39 406,108 476,39 546,69.7 616,108 680,108"
+                    points={golivePolyline}
                     fill="none"
                     stroke="var(--chart-green)"
                     strokeWidth="2.5"
@@ -649,22 +996,44 @@ export function TabOverview({
 
                   {/* Blue Dots */}
                   <g className="dd-line__dot" stroke="var(--chart-blue-primary)">
-                    {[
-                      [56, 77.3], [126, 39], [196, 69.7], [266, 77.3], [336, 92.7],
-                      [406, 108], [476, 46.7], [546, 16], [616, 62], [680, 146.3],
-                    ].map(([cx, cy], i) => (
-                      <circle key={i} cx={cx} cy={cy} r="3.5" />
-                    ))}
+                    {intakePoints.map((p, i) => {
+                      const m = monthlyData[i];
+                      const isSelected =
+                        monthWindow !== null &&
+                        m &&
+                        m.monthNum >= monthWindow.startMonth &&
+                        m.monthNum <= monthWindow.endMonth;
+                      return (
+                        <circle
+                          key={i}
+                          cx={p.x}
+                          cy={p.y}
+                          r={isSelected ? "5.5" : "3.5"}
+                          strokeWidth={isSelected ? "2.5" : "2"}
+                        />
+                      );
+                    })}
                   </g>
 
                   {/* Green Dots */}
                   <g className="dd-line__dot" stroke="var(--chart-green)">
-                    {[
-                      [56, 146.3], [126, 154], [196, 123.3], [266, 161.7], [336, 39],
-                      [406, 108], [476, 39], [546, 69.7], [616, 108], [680, 108],
-                    ].map(([cx, cy], i) => (
-                      <circle key={i} cx={cx} cy={cy} r="3.5" />
-                    ))}
+                    {golivePoints.map((p, i) => {
+                      const m = monthlyData[i];
+                      const isSelected =
+                        monthWindow !== null &&
+                        m &&
+                        m.monthNum >= monthWindow.startMonth &&
+                        m.monthNum <= monthWindow.endMonth;
+                      return (
+                        <circle
+                          key={i}
+                          cx={p.x}
+                          cy={p.y}
+                          r={isSelected ? "5.5" : "3.5"}
+                          strokeWidth={isSelected ? "2.5" : "2"}
+                        />
+                      );
+                    })}
                   </g>
                 </svg>
 
@@ -680,13 +1049,24 @@ export function TabOverview({
                   }}
                 >
                   {monthlyData.map((m, i) => {
-                    const isRightSide = i >= 6;
+                    const isRightSide = i >= Math.floor(monthlyData.length / 2);
+                    const isSelected =
+                      monthWindow !== null &&
+                      m.monthNum >= monthWindow.startMonth &&
+                      m.monthNum <= monthWindow.endMonth;
                     return (
                       <div
                         key={m.name}
-                        className="hv hvcol"
+                        className={`hv hvcol ${isSelected ? "hvcol--active" : ""}`}
                         tabIndex={0}
-                        style={{ left: m.left, width: m.width }}
+                        style={{
+                          left: m.left,
+                          width: m.width,
+                          background: isSelected
+                            ? "rgba(59, 130, 246, 0.08)"
+                            : undefined,
+                          borderRadius: 6,
+                        }}
                       >
                         <span className="gl2" style={{ left: "50%" }} />
                         <div
@@ -757,7 +1137,7 @@ export function TabOverview({
                         setActiveModal({
                           type: "inprog",
                           title: "In progress projects",
-                          subtitle: "51 proyek di FSD, DEV, SIT dan change request",
+                          subtitle: `${g.n} proyek di FSD, DEV, SIT dan change request`,
                         });
                       } else {
                         setActiveModal({
@@ -792,7 +1172,7 @@ export function TabOverview({
                         setActiveModal({
                           type: "inprog",
                           title: "In progress projects",
-                          subtitle: "51 proyek di FSD, DEV, SIT dan change request",
+                          subtitle: `${g.n} proyek di FSD, DEV, SIT dan change request`,
                         });
                       } else {
                         setActiveModal({
@@ -842,7 +1222,7 @@ export function TabOverview({
                     role="tab"
                     onClick={() => setUatTab("aktif")}
                   >
-                    Aktif 8
+                    Aktif {uatActiveCount}
                   </button>
                   <button
                     className={`dd-seg__btn ${uatTab === "riwayat" ? "dd-seg__btn--active" : ""}`}
@@ -850,7 +1230,7 @@ export function TabOverview({
                     role="tab"
                     onClick={() => setUatTab("riwayat")}
                   >
-                    Riwayat 31
+                    Riwayat {uatHistoryCount}
                   </button>
                 </div>
               </div>
@@ -860,11 +1240,11 @@ export function TabOverview({
               className="dd-card__body"
               style={{ justifyContent: "flex-start", marginTop: 12 }}
             >
-              {uatTab === "aktif" ? (
+              {currentUatList.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  {uatRescheduledList.map((u, i) => (
+                  {currentUatList.slice(0, 10).map((u, i) => (
                     <div
-                      key={i}
+                      key={u.originalProject?.notion_page_id || `${u.name}-${i}`}
                       onClick={() => {
                         if (u.originalProject) {
                           setActiveModal({
@@ -911,9 +1291,15 @@ export function TabOverview({
                 </div>
               ) : (
                 <div className="dd-empty">
-                  <div className="dd-empty__title">31 riwayat reschedule</div>
+                  <div className="dd-empty__title">
+                    {uatTab === "aktif"
+                      ? "Tidak ada proyek reschedule aktif"
+                      : "Tidak ada riwayat reschedule"}
+                  </div>
                   <div className="dd-empty__msg">
-                    Daftar riwayat lengkap dapat dilihat pada modul audit SLA.
+                    {uatTab === "aktif"
+                      ? "Semua proyek aktif berjalan sesuai jadwal UAT."
+                      : "Belum ada catatan reschedule UAT pada periode ini."}
                   </div>
                 </div>
               )}
@@ -952,7 +1338,7 @@ export function TabOverview({
                   <path d="M12 17h.01" />
                   <circle cx="12" cy="12" r="10" />
                 </svg>
-                <span style={{ flex: 1 }}>15 proyek masih terlambat</span>
+                <span style={{ flex: 1 }}>{needsAttentionProjects.length} proyek masih terlambat</span>
                 <span>Review →</span>
               </button>
             </div>
@@ -968,11 +1354,15 @@ export function TabOverview({
                 </p>
               </div>
               <div className="dd-card__actions">
-                <span className="dd-delta dd-delta--down">
+                <span className={`dd-delta ${devSlaYoY.isUp ? "dd-delta--up" : "dd-delta--down"}`}>
                   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M12 18 4 8h16z" />
+                    {devSlaYoY.isUp ? (
+                      <path d="M12 6 4 16h16z" />
+                    ) : (
+                      <path d="M12 18 4 8h16z" />
+                    )}
                   </svg>
-                  3 pt
+                  {Math.abs(devSlaYoY.diff)} pt
                 </span>
               </div>
             </div>
@@ -983,7 +1373,7 @@ export function TabOverview({
             >
               <div
                 role="img"
-                aria-label="DEV SLA 2025 78 persen, 2026 75 persen, target 93 persen"
+                aria-label={`DEV SLA ${devSlaYoY.prevYear} ${devSlaYoY.prevEval.rate} persen, ${devSlaYoY.currYear} ${devSlaYoY.currEval.rate} persen, target 93 persen`}
                 style={{
                   flex: 1,
                   minHeight: 200,
@@ -1037,31 +1427,33 @@ export function TabOverview({
                     Target 93%
                   </span>
 
-                  {/* Bar 2025 */}
+                  {/* Bar Prev Year */}
                   <button
                     type="button"
                     className="hv"
                     onClick={() =>
                       setActiveModal({
                         type: "stage",
-                        title: "DEV SLA 2025",
-                        subtitle: "Detail pencapaian SLA Development tahun 2025",
+                        title: `DEV SLA ${devSlaYoY.prevYear}`,
+                        subtitle: `Detail pencapaian SLA Development tahun ${devSlaYoY.prevYear}`,
                         stageData: {
-                          name: "DEV SLA 2025",
-                          pct: "78%",
-                          data: 95,
-                          ok: 74,
-                          miss: 21,
+                          name: `DEV SLA ${devSlaYoY.prevYear}`,
+                          pct: `${devSlaYoY.prevEval.rate}%`,
+                          data: devSlaYoY.prevEval.data,
+                          ok: devSlaYoY.prevEval.ok,
+                          miss: devSlaYoY.prevEval.miss,
+                          achievedProjects: devSlaYoY.prevEval.achievedProjects,
+                          missedProjects: devSlaYoY.prevEval.missedProjects,
                         },
                       })
                     }
-                    aria-label="DEV SLA 2025, klik untuk detail"
+                    aria-label={`DEV SLA ${devSlaYoY.prevYear}, klik untuk detail`}
                     style={{
                       position: "absolute",
                       left: "22%",
                       width: "22%",
                       bottom: 0,
-                      height: "78%",
+                      height: `${Math.min(100, Math.max(0, devSlaYoY.prevEval.rate))}%`,
                       background: "none",
                       border: 0,
                       padding: 0,
@@ -1087,33 +1479,33 @@ export function TabOverview({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      78%
+                      {devSlaYoY.prevEval.rate}%
                     </span>
                     <span
                       className="tip tipcard"
                       style={{ left: "calc(100% + 12px)", top: 0 }}
                     >
                       <span className="tipcard__h">
-                        <span>Tahun 2025</span>
+                        <span>Tahun {devSlaYoY.prevYear}</span>
                         <span className="dd-pill dd-pill--blue">
                           <span className="dd-pill__dot" />
-                          78% SLA
+                          {devSlaYoY.prevEval.rate}% SLA
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Jumlah data</span>
-                        <span>95 proyek</span>
+                        <span>{devSlaYoY.prevEval.data} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Achieved</span>
                         <span style={{ color: "var(--status-green-fg)" }}>
-                          74 proyek
+                          {devSlaYoY.prevEval.ok} proyek
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Not achieved</span>
                         <span style={{ color: "var(--status-red-fg)" }}>
-                          21 proyek
+                          {devSlaYoY.prevEval.miss} proyek
                         </span>
                       </span>
                       <span className="dd-table__secondary" style={{ margin: 0 }}>
@@ -1122,31 +1514,33 @@ export function TabOverview({
                     </span>
                   </button>
 
-                  {/* Bar 2026 */}
+                  {/* Bar Curr Year */}
                   <button
                     type="button"
                     className="hv"
                     onClick={() =>
                       setActiveModal({
                         type: "stage",
-                        title: "DEV SLA 2026",
-                        subtitle: "Detail pencapaian SLA Development tahun 2026",
+                        title: `DEV SLA ${devSlaYoY.currYear}`,
+                        subtitle: `Detail pencapaian SLA Development tahun ${devSlaYoY.currYear}`,
                         stageData: {
-                          name: "DEV SLA 2026",
-                          pct: "75%",
-                          data: 134,
-                          ok: 101,
-                          miss: 33,
+                          name: `DEV SLA ${devSlaYoY.currYear}`,
+                          pct: `${devSlaYoY.currEval.rate}%`,
+                          data: devSlaYoY.currEval.data,
+                          ok: devSlaYoY.currEval.ok,
+                          miss: devSlaYoY.currEval.miss,
+                          achievedProjects: devSlaYoY.currEval.achievedProjects,
+                          missedProjects: devSlaYoY.currEval.missedProjects,
                         },
                       })
                     }
-                    aria-label="DEV SLA 2026, klik untuk detail"
+                    aria-label={`DEV SLA ${devSlaYoY.currYear}, klik untuk detail`}
                     style={{
                       position: "absolute",
                       left: "58%",
                       width: "22%",
                       bottom: 0,
-                      height: "75%",
+                      height: `${Math.min(100, Math.max(0, devSlaYoY.currEval.rate))}%`,
                       background: "none",
                       border: 0,
                       padding: 0,
@@ -1172,33 +1566,33 @@ export function TabOverview({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      75%
+                      {devSlaYoY.currEval.rate}%
                     </span>
                     <span
                       className="tip tipcard"
                       style={{ right: "calc(100% + 12px)", top: 0 }}
                     >
                       <span className="tipcard__h">
-                        <span>Tahun 2026</span>
+                        <span>Tahun {devSlaYoY.currYear}</span>
                         <span className="dd-pill dd-pill--blue">
                           <span className="dd-pill__dot" />
-                          75% SLA
+                          {devSlaYoY.currEval.rate}% SLA
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Jumlah data</span>
-                        <span>134 proyek</span>
+                        <span>{devSlaYoY.currEval.data} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Achieved</span>
                         <span style={{ color: "var(--status-green-fg)" }}>
-                          101 proyek
+                          {devSlaYoY.currEval.ok} proyek
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Not achieved</span>
                         <span style={{ color: "var(--status-red-fg)" }}>
-                          33 proyek
+                          {devSlaYoY.currEval.miss} proyek
                         </span>
                       </span>
                       <span className="dd-table__secondary" style={{ margin: 0 }}>
@@ -1226,7 +1620,7 @@ export function TabOverview({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    2025 · 95 data
+                    {devSlaYoY.prevYear} · {devSlaYoY.prevEval.data} data
                   </span>
                   <span
                     style={{
@@ -1237,7 +1631,7 @@ export function TabOverview({
                       whiteSpace: "nowrap",
                     }}
                   >
-                    2026 · 134 data
+                    {devSlaYoY.currYear} · {devSlaYoY.currEval.data} data
                   </span>
                 </div>
               </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import type { SanitizedProject } from "../types/types";
 import { PicMonitoringModals, type ModalPayload } from "./PicMonitoringModals";
+import { useFilters } from "../context/FilterContext";
 
 interface TabProjectsProps {
   projects: SanitizedProject[];
@@ -27,12 +28,56 @@ const IC = {
   clock: "M12 6v6l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z",
 };
 
-export function TabProjects({ projects = [] }: TabProjectsProps) {
+export function getProjectIntakeYear(p: SanitizedProject): string {
+  // 1. Check Ticket format (YYMMxxxx, e.g. 24120089 -> 2024, 25010042 -> 2025, 26020015 -> 2026)
+  const ticket = String(p.Ticket ?? "").trim();
+  const ticketMatch = /^(\d{2})(\d{2})\d{3,}/.exec(ticket);
+  if (ticketMatch) {
+    const m = Number(ticketMatch[2]);
+    if (m >= 1 && m <= 12) {
+      return String(2000 + Number(ticketMatch[1]));
+    }
+  }
+
+  // 2. Check _year from parsed "Project diajukan"
+  if (p._year && /^(?:19|20)\d{2}$/.test(String(p._year).trim())) {
+    return String(p._year).trim();
+  }
+
+  // 3. Check "Project diajukan" directly
+  const cd = (p as unknown as { cleansed_data?: Record<string, unknown> }).cleansed_data ?? p;
+  const diajukan = cd["Project diajukan"] ?? (p as Record<string, unknown>)["Project diajukan"];
+  if (diajukan) {
+    const match = /(?:19|20)\d{2}/.exec(String(diajukan));
+    if (match) return match[0];
+  }
+
+  // 4. Check Created time
+  const createdRaw = p["Created time"] ?? (p as { created_time?: unknown }).created_time;
+  if (createdRaw) {
+    const isoMatch = /^(\d{4})/.exec(String(createdRaw).trim());
+    if (isoMatch) return isoMatch[1];
+  }
+
+  // 5. Fallback to Year
+  if (p.Year) {
+    const yStr = String(p.Year).trim();
+    if (/^(?:19|20)\d{2}$/.test(yStr)) return yStr;
+  }
+
+  return "";
+}
+
+export function TabProjects({ projects = [], selectedYear = 2026 }: TabProjectsProps) {
   const [activeModal, setActiveModal] = useState<ModalPayload | null>(null);
+
+  // Sync with global topbar year filter
+  const filters = useFilters();
+  const activeYear = filters?.year ? String(filters.year) : String(selectedYear || "2026");
 
   // Filters & Search
   const [q, setQ] = useState("");
-  const [pYear, setPYear] = useState("Semua");
+  const [pYear, setPYear] = useState<string>(activeYear);
   const [pType, setPType] = useState("Semua");
   const [pDiv, setPDiv] = useState("Semua");
   const [pPipe, setPPipe] = useState("Semua");
@@ -43,156 +88,41 @@ export function TabProjects({ projects = [] }: TabProjectsProps) {
   // Active open dropdown tracker
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-  // Distinct Filter Options
+  // Synchronize when activeYear changes in the topbar
+  useEffect(() => {
+    setPYear(activeYear);
+    setPPage(1);
+  }, [activeYear]);
+
+  // Pure projects from database, strictly restricted to 2025 and 2026 intake
+  const projectList = useMemo(() => {
+    return projects.filter((p) => {
+      const y = getProjectIntakeYear(p);
+      return y === "2025" || y === "2026";
+    });
+  }, [projects]);
+
+  // Distinct Filter Options derived from 2025-2026 projectList
   const divisions = useMemo(() => {
     const set = new Set<string>();
-    projects.forEach((p) => {
+    projectList.forEach((p) => {
       const d = p["Owner Div"] || p["Owner Division"];
       if (d && String(d).trim()) set.add(String(d).trim());
     });
     return Array.from(set).sort();
-  }, [projects]);
+  }, [projectList]);
 
   const projectTypes = useMemo(() => {
     const set = new Set<string>();
-    projects.forEach((p) => {
+    projectList.forEach((p) => {
       const t = p["Type Project"];
       if (t && String(t).trim()) set.add(String(t).trim());
     });
     return Array.from(set).sort();
-  }, [projects]);
+  }, [projectList]);
 
-  const years = useMemo(() => {
-    const set = new Set<string>();
-    projects.forEach((p) => {
-      const y = p.Year || p._year;
-      if (y) set.add(String(y));
-    });
-    return Array.from(set).sort().reverse();
-  }, [projects]);
-
-  // Fallback demo projects if empty
-  const projectList = useMemo(() => {
-    if (projects.length > 0) return projects;
-    // Mock sample items matching prototype
-    const demo: SanitizedProject[] = [
-      {
-        Ticket: "26100002",
-        "Project Name": "Tambah Filter Pencarian CPM Receive Version",
-        "Type Project": "Enhance Kecil",
-        "Owner Name": "Ayu Anggraini",
-        "Owner Div": "Operasional Cash Pickup",
-        "PIC Name": "Dina Maharani",
-        "Last Status": "FSD On Progress",
-        _year: "2026",
-        "FSD SLA": "Achieved",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26100034",
-        "Project Name": "Approval Digital Pengajuan Inventory Kendaraan",
-        "Type Project": "Approval Digital",
-        "Owner Name": "Budi Santoso",
-        "Owner Div": "Cabang Jakarta",
-        "PIC Name": "Candra Wijaya",
-        "Last Status": "FSD On Progress",
-        _year: "2026",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26100007",
-        "Project Name": "Penambahan Kolom Laporan Saldo Bank",
-        "Type Project": "Enhance Kecil",
-        "Owner Name": "Agus Wibowo",
-        "Owner Div": "Sales & Marketing",
-        "PIC Name": "Farah Nabila",
-        "Last Status": "On Queue",
-        _year: "2026",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26100030",
-        "Project Name": "Setting Report Custom Menu Tagihan Cabang",
-        "Type Project": "Enhance Kecil",
-        "Owner Name": "Ayu Anggraini",
-        "Owner Div": "Operasional Cash Pickup",
-        "PIC Name": "Eka Saputra",
-        "Last Status": "Dev On Progress",
-        _year: "2026",
-        "DEV SLA": "Achieved",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26100019",
-        "Project Name": "Pengembangan E-HR Attendance Phase 1",
-        "Type Project": "Project Utama",
-        "Owner Name": "Budi Santoso",
-        "Owner Div": "Cabang Jakarta",
-        "PIC Name": "Eka Saputra",
-        "Last Status": "Dev Pending Estimation",
-        _year: "2026",
-        "DEV SLA": "Achieved",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26100024",
-        "Project Name": "Penyesuaian Validasi Jadwal Kunjungan Fase B",
-        "Type Project": "Enhance Kecil",
-        "Owner Name": "Rina Marlina",
-        "Owner Div": "Sales & Marketing",
-        "PIC Name": "Gilang Ramadhan",
-        "Last Status": "FSD On Progress",
-        _year: "2026",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26100017",
-        "Project Name": "Approval Digital Pengajuan Rekonsiliasi Cash Pickup",
-        "Type Project": "Approval Digital",
-        "Owner Name": "Agus Wibowo",
-        "Owner Div": "Logistik & Armada",
-        "PIC Name": "Gilang Ramadhan",
-        "Last Status": "FSD On Progress",
-        _year: "2026",
-        "(FSD) Late Days": 9,
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26090037",
-        "Project Name": "Migrasi CPM Receive Version ke Platform Baru",
-        "Type Project": "Project Utama",
-        "Owner Name": "Yoga Permana",
-        "Owner Div": "Operasional Cash Pickup",
-        "PIC Name": "Gilang Ramadhan",
-        "Last Status": "Dev On Queue",
-        _year: "2026",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26090015",
-        "Project Name": "Approval Digital Perubahan Data Portal Vendor",
-        "Type Project": "Approval Digital",
-        "Owner Name": "Maya Puspita",
-        "Owner Div": "Logistik & Armada",
-        "PIC Name": "Gilang Ramadhan",
-        "Last Status": "Dev On Progress",
-        _year: "2026",
-        "DEV SLA": "Achieved",
-      } as unknown as SanitizedProject,
-      {
-        Ticket: "26090069",
-        "Project Name": "Enhancement Report Custom ATM Phase 2",
-        "Type Project": "Enhance Kecil",
-        "Owner Name": "Ayu Anggraini",
-        "Owner Div": "Operasional Cash Pickup",
-        "PIC Name": "Candra Wijaya",
-        "Last Status": "On Queue",
-        _year: "2026",
-      } as unknown as SanitizedProject,
-    ];
-    // Extend demo to 294 items matching prototype (294 total, 117 Queue)
-    return Array.from({ length: 294 }, (_, i) => {
-      const b = demo[i % demo.length];
-      return i < demo.length
-        ? b
-        : ({
-            ...b,
-            Ticket: String(Number(b.Ticket) - Math.floor(i / 10) * 3 - (i % 10)),
-          } as unknown as SanitizedProject);
-    });
-  }, [projects]);
+  // Intake year options: strictly 2026 and 2025
+  const years = ["2026", "2025"];
 
   // Filtering Logic
   const filteredRows = useMemo(() => {
@@ -211,7 +141,7 @@ export function TabProjects({ projects = [] }: TabProjectsProps) {
 
       // Year Filter
       if (pYear !== "Semua") {
-        const y = String(p.Year || p._year || "");
+        const y = getProjectIntakeYear(p);
         if (y !== pYear) return false;
       }
 
@@ -428,6 +358,9 @@ export function TabProjects({ projects = [] }: TabProjectsProps) {
                           className={`dd-dd__opt ${pYear === yr ? "dd-dd__opt--active" : ""}`}
                           onClick={() => {
                             setPYear(yr);
+                            if (yr !== "Semua" && filters?.setYear) {
+                              filters.setYear(yr);
+                            }
                             setPPage(1);
                             setActiveDropdown(null);
                           }}
@@ -758,7 +691,7 @@ export function TabProjects({ projects = [] }: TabProjectsProps) {
                     type="button"
                     onClick={() => {
                       setQ("");
-                      setPYear("Semua");
+                      setPYear(activeYear);
                       setPType("Semua");
                       setPDiv("Semua");
                       setPPipe("Semua");

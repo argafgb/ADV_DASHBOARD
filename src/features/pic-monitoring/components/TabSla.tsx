@@ -3,7 +3,12 @@
 import React, { useState, useMemo, useRef } from "react";
 import type { DashboardDataset, SanitizedProject, RawProject } from "../types/types";
 import { formatPeriodLabel, monthWindowOf } from "../utils/period-filter";
-import { evaluateStageSla } from "../utils/sla-policy";
+import {
+  evaluateStageSla,
+  selectMultiStageFailures,
+  isStageRealizedInMonths,
+} from "../utils/sla-policy";
+import { getProjectIntakeYearMonth } from "../services/project-data";
 import { PicMonitoringModals, type ModalPayload } from "./PicMonitoringModals";
 import { useUploadOverride } from "../context/UploadOverrideContext";
 
@@ -45,7 +50,47 @@ export function TabSla({
   const override = useUploadOverride();
 
   const selectedYear = endYear || startYear || 2026;
-  const periodLabel = formatPeriodLabel(selectedYear, monthWindowOf(month));
+  const prevYear = selectedYear - 1;
+  const monthWindow = useMemo(() => monthWindowOf(month), [month]);
+  const periodLabel = formatPeriodLabel(selectedYear, monthWindow);
+  const slaPeriod = useMemo(
+    () => ({
+      year: selectedYear,
+      months: monthWindow,
+    }),
+    [selectedYear, monthWindow],
+  );
+
+  // DEV SLA YoY and Annual Data
+  const devAnnualData = useMemo(() => {
+    const getDevSla = (yr: number) => {
+      const res = evaluateStageSla(slaProjects, "DEV", {
+        year: yr,
+        months: monthWindow,
+      });
+      const ok = res.achieved;
+      const miss = res.notAchieved;
+      const tot = res.contributors;
+      const rate = res.percentage !== null ? Math.round(res.percentage) : 0;
+      return {
+        ok,
+        miss,
+        tot,
+        rate,
+        achievedProjects: res.achievedProjects,
+        missedProjects: res.notAchievedProjects,
+      };
+    };
+
+    const prev = getDevSla(prevYear);
+    const curr = getDevSla(selectedYear);
+    const maxTot = Math.max(prev.tot, curr.tot, 1);
+    const ceiling = Math.max(140, Math.ceil(maxTot / 35) * 35);
+
+    return { prev, curr, ceiling };
+  }, [slaProjects, prevYear, selectedYear, monthWindow]);
+
+  const devYoYDelta = devAnnualData.curr.rate - devAnnualData.prev.rate;
 
   const uploadFn = onUploadFile || override?.processUploadedFile;
 
@@ -63,25 +108,13 @@ export function TabSla({
     }
   };
 
-  // 1. Stage evaluations (matched exactly with prototype reference & max 100%)
+  // 1. Stage evaluations
   const stageEvaluations = useMemo<StageEvalItem[]>(() => {
-    const defaultData: StageEvalItem[] = [
-      { name: "FSD SLA", pct: "80%", data: 157, ok: 126, miss: 31, rate: 80 },
-      { name: "DEV SLA", pct: "75%", data: 134, ok: 101, miss: 33, rate: 75, delta: true },
-      { name: "SIT SLA", pct: "81%", data: 134, ok: 109, miss: 25, rate: 81 },
-      { name: "UAT SLA", pct: "80%", data: 133, ok: 106, miss: 27, rate: 80 },
-      { name: "Live SLA", pct: "85%", data: 122, ok: 104, miss: 18, rate: 85 },
-    ];
-
-    if (selectedYear === 2026 || !slaProjects || slaProjects.length === 0) {
-      return defaultData;
-    }
-
     const stageKeys = ["FSD", "DEV", "SIT", "UAT", "LIVE"] as const;
-    return stageKeys.map((key, idx) => {
+    return stageKeys.map((key) => {
       try {
-        const evalResult = evaluateStageSla(slaProjects, key, selectedYear);
-        if (evalResult && evalResult.contributors > 0) {
+        const evalResult = evaluateStageSla(slaProjects, key, slaPeriod);
+        if (evalResult) {
           const rawRate = evalResult.percentage !== null ? Math.round(evalResult.percentage) : 0;
           const rate = Math.min(100, Math.max(0, rawRate));
           return {
@@ -99,9 +132,17 @@ export function TabSla({
       } catch {
         // Fallback
       }
-      return defaultData[idx];
+      return {
+        name: `${key === "LIVE" ? "Live" : key} SLA`,
+        pct: "0%",
+        data: 0,
+        ok: 0,
+        miss: 0,
+        rate: 0,
+        delta: key === "DEV",
+      };
     });
-  }, [slaProjects, selectedYear]);
+  }, [slaProjects, slaPeriod]);
 
   const handleDownloadData = () => {
     const headers = [
@@ -136,15 +177,165 @@ export function TabSla({
     document.body.removeChild(link);
   };
 
-  // 2. Delay root causes
-  const causesRaw = [
-    { name: "Resource Terbatas", n: 10, p: "37%" },
-    { name: "Kendala Teknis", n: 6, p: "22%" },
-    { name: "Requirement Berubah", n: 5, p: "19%" },
-    { name: "Dependensi Vendor", n: 3, p: "11%" },
-    { name: "Prioritas Bergeser", n: 2, p: "7%" },
-    { name: "Data Belum Siap", n: 1, p: "4%" },
-  ];
+  // 2. Delay Tracker data
+  const delayAll = useMemo(() => {
+    if (!slaProjects || slaProjects.length === 0) return [];
+
+    const result: Array<{
+      no: number;
+      name: string;
+      tk: string;
+      cause: string;
+      total: number;
+      gates: string[];
+      project: SanitizedProject;
+    }> = [];
+
+    slaProjects.forEach((p) => {
+      const yr = String(p._year || p.Year || "");
+      const fsdYr = String(p["FSD SLA YEAR"] || "");
+      const devYr = String(p["DEV SLA YEAR"] || "");
+      const sitYr = String(p["SIT SLA YEAR"] || "");
+      const uatYr = String(p["UAT SLA YEAR"] || "");
+      const liveYr = String(p["LIVE SLA YEAR"] || "");
+
+      const isMatchYear =
+        yr === String(selectedYear) ||
+        fsdYr === String(selectedYear) ||
+        devYr === String(selectedYear) ||
+        sitYr === String(selectedYear) ||
+        uatYr === String(selectedYear) ||
+        liveYr === String(selectedYear);
+
+      if (!isMatchYear) return;
+
+      if (monthWindow !== null) {
+        let matchedInMonth = false;
+        const stages = ["FSD", "DEV", "SIT", "UAT", "LIVE"] as const;
+        for (const st of stages) {
+          if (isStageRealizedInMonths(p, st, selectedYear, monthWindow)) {
+            matchedInMonth = true;
+            break;
+          }
+        }
+        if (!matchedInMonth) {
+          const intake = getProjectIntakeYearMonth(p);
+          if (
+            intake &&
+            intake.year === selectedYear &&
+            intake.month >= monthWindow.startMonth &&
+            intake.month <= monthWindow.endMonth
+          ) {
+            matchedInMonth = true;
+          }
+        }
+        if (!matchedInMonth) return;
+      }
+
+      const gates: string[] = [];
+      let total = 0;
+
+      const fsdLate = Number(p["(FSD) Late Days"]) || 0;
+      if (fsdLate > 0) {
+        gates.push(`FSD ${fsdLate} hari`);
+        total += fsdLate;
+      }
+
+      const devLate = Number(p["(Dev) Late Days"]) || 0;
+      if (devLate > 0) {
+        gates.push(`DEV ${devLate} hari`);
+        total += devLate;
+      }
+
+      const sitLate = Number(p["(SIT) Late Days"]) || 0;
+      if (sitLate > 0) {
+        gates.push(`SIT ${sitLate} hari`);
+        total += sitLate;
+      }
+
+      const uatLate = Number(p["(UAT) Late Days"]) || 0;
+      if (uatLate > 0) {
+        gates.push(`UAT ${uatLate} hari`);
+        total += uatLate;
+      }
+
+      const liveLate = Number(p["(Live) Late Days"]) || 0;
+      if (liveLate > 0) {
+        gates.push(`LIVE ${liveLate} hari`);
+        total += liveLate;
+      }
+
+      if (total > 0 || gates.length > 0) {
+        const causeList: string[] = [];
+        [
+          p["(FSD) Kategori Alasan Terlambat >=2022"],
+          p["(Dev) Kategori Alasan Terlambat >=2022"],
+          p["(SIT) Kategori Alasan Terlambat >=2022"],
+          p["(UAT) Kategori Alasan Terlambat >=2022"],
+          p["(Live) Kategori Alasan Terlambat >=2022"],
+        ].forEach((c) => {
+          if (c && typeof c === "string" && c.trim() && !causeList.includes(c.trim())) {
+            causeList.push(c.trim());
+          }
+        });
+
+        result.push({
+          no: 0,
+          name: p["Project Name"] || "Untitled Project",
+          tk: p.Ticket || "-",
+          cause: causeList.length > 0 ? causeList.join(", ") : "Belum diisi",
+          total,
+          gates,
+          project: p,
+        });
+      }
+    });
+
+    return result
+      .sort((a, b) => b.total - a.total)
+      .map((d, idx) => ({ ...d, no: idx + 1 }));
+  }, [slaProjects, selectedYear, monthWindow]);
+
+  const avgDelay = useMemo(() => {
+    if (delayAll.length === 0) return 0;
+    const sum = delayAll.reduce((acc, d) => acc + d.total, 0);
+    return Math.round(sum / delayAll.length);
+  }, [delayAll]);
+
+  // 3. Delay root causes
+  const causesRaw = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let totalCauses = 0;
+
+    delayAll.forEach((d) => {
+      if (d.cause && d.cause !== "Belum diisi") {
+        d.cause.split(",").forEach((c) => {
+          const trimmed = c.trim();
+          if (trimmed) {
+            counts[trimmed] = (counts[trimmed] || 0) + 1;
+            totalCauses += 1;
+          }
+        });
+      }
+    });
+
+    const entries = Object.entries(counts);
+    if (entries.length === 0) return [];
+
+    return entries
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([name, n]) => ({
+        name,
+        n,
+        p: `${Math.round((n / totalCauses) * 100)}%`,
+      }));
+  }, [delayAll]);
+
+  const maxCauseN = useMemo(() => {
+    const top = causesRaw[0]?.n || 1;
+    return Math.max(10, Math.ceil(top / 5) * 5);
+  }, [causesRaw]);
 
   const causes = causesRaw.map((c, i) => {
     const isSelected = selectedCause === c.name;
@@ -154,54 +345,28 @@ export function TabSla({
       name: c.name,
       n: c.n,
       p: c.p,
-      w: `${c.n * 10}%`,
+      w: `${Math.round((c.n / maxCauseN) * 100)}%`,
       color: isDimmed ? "var(--chart-blue-light)" : "var(--chart-blue-primary)",
       ink: isSelected ? "var(--dd-accent)" : "var(--text-primary)",
     };
   });
 
-  // 3. Multi-Stage SLA Failures
-  const multiStageFailures = [
-    {
-      name: "Monitoring Selisih (Claimsys ATM) - Phase 1",
-      stages: ["FSD · Not achieved", "DEV · Not achieved"],
-      year: "2026",
-      status: "Dev On Progress",
-    },
-    {
-      name: "Pengembangan E-HR Attendance Phase 1",
-      stages: ["FSD · Not achieved", "DEV · Not achieved"],
-      year: "2026",
-      status: "Dev Pending Estimation",
-    },
-    {
-      name: "Migrasi CPM Receive Version ke Platform Baru",
-      stages: ["DEV · Not achieved", "SIT · Not achieved"],
-      year: "2026",
-      status: "Dev On Queue",
-    },
-    {
-      name: "Approval Digital Pengajuan Rekonsiliasi Cash Pickup",
-      stages: ["FSD · Not achieved", "DEV · Not achieved"],
-      year: "2026",
-      status: "FSD On Progress",
-    },
-    {
-      name: "Otomasi Bill Counter dengan OCR",
-      stages: ["DEV · Not achieved", "SIT · Not achieved"],
-      year: "2026",
-      status: "Change Request On Progress",
-    },
-  ];
-
-  // 4. Delay Tracker data matching prototype
-  const delayAll = [
-    { no: 1, name: "Tambah Filter Pencarian Reimbursement Online", tk: "25120038", cause: "Dependensi Vendor, Kendala Teknis", total: 108, gates: ["SIT 40 hari", "LIVE 68 hari"] },
-    { no: 2, name: "Setting Report Custom Absensi Cabang", tk: "26020048", cause: "Requirement Berubah", total: 55, gates: ["FSD 6 hari", "UAT 58 hari"] },
-    { no: 3, name: "Enhance Menu CPM Receive Version", tk: "26020004", cause: "Belum diisi", total: 51, gates: ["UAT 60 hari"] },
-    { no: 4, name: "Implementasi Manifest Pengiriman Baru", tk: "25120003", cause: "Kendala Teknis", total: 51, gates: ["FSD 36 hari", "LIVE 23 hari"] },
-    { no: 5, name: "Integrasi API Portal Vendor dengan Core System", tk: "25090007", cause: "Resource Terbatas", total: 49, gates: ["SIT 9 hari", "LIVE 40 hari"] },
-  ];
+  // 4. Multi-Stage SLA Failures
+  const multiStageFailures = useMemo(() => {
+    if (!slaProjects || slaProjects.length === 0) return [];
+    const list = selectMultiStageFailures(slaProjects, slaPeriod);
+    return list.map((item) => {
+      const p = item.project;
+      const stages = item.failedStages.map((s) => `${s.stage} · Not achieved`);
+      return {
+        name: (p["Project Name"] as string) || "Untitled Project",
+        stages,
+        year: String(p._year || p.Year || selectedYear),
+        status: (p["Last Status"] as string) || "On Progress",
+        project: p as SanitizedProject,
+      };
+    });
+  }, [slaProjects, slaPeriod, selectedYear]);
 
   const filteredDelays = delayAll.filter((d) => {
     const matchCause = !selectedCause || d.cause.includes(selectedCause);
@@ -304,11 +469,11 @@ export function TabSla({
                   </span>
                   {s.delta && (
                     <span
-                      className="dd-delta dd-delta--down"
+                      className={`dd-delta ${devYoYDelta >= 0 ? "dd-delta--up" : "dd-delta--down"}`}
                       style={{ marginLeft: "auto" }}
-                      title="Dibanding 2025: 78%"
+                      title={`Dibanding ${prevYear}: ${devAnnualData.prev.rate}%`}
                     >
-                      ▼ 3 pt
+                      {devYoYDelta >= 0 ? `▲ ${devYoYDelta} pt` : `▼ ${Math.abs(devYoYDelta)} pt`}
                     </span>
                   )}
                 </div>
@@ -463,11 +628,11 @@ export function TabSla({
                   }}
                 >
                   <span style={{ position: "absolute", left: 0, transform: "translateX(-50%)" }}>0</span>
-                  <span style={{ position: "absolute", left: "20%", transform: "translateX(-50%)" }}>2</span>
-                  <span style={{ position: "absolute", left: "40%", transform: "translateX(-50%)" }}>4</span>
-                  <span style={{ position: "absolute", left: "60%", transform: "translateX(-50%)" }}>6</span>
-                  <span style={{ position: "absolute", left: "80%", transform: "translateX(-50%)" }}>8</span>
-                  <span style={{ position: "absolute", left: "100%", transform: "translateX(-50%)" }}>10</span>
+                  <span style={{ position: "absolute", left: "20%", transform: "translateX(-50%)" }}>{Math.round(maxCauseN * 0.2)}</span>
+                  <span style={{ position: "absolute", left: "40%", transform: "translateX(-50%)" }}>{Math.round(maxCauseN * 0.4)}</span>
+                  <span style={{ position: "absolute", left: "60%", transform: "translateX(-50%)" }}>{Math.round(maxCauseN * 0.6)}</span>
+                  <span style={{ position: "absolute", left: "80%", transform: "translateX(-50%)" }}>{Math.round(maxCauseN * 0.8)}</span>
+                  <span style={{ position: "absolute", left: "100%", transform: "translateX(-50%)" }}>{maxCauseN}</span>
                 </div>
               </div>
             </div>
@@ -495,7 +660,7 @@ export function TabSla({
             >
               <div
                 role="img"
-                aria-label="DEV SLA 2025: 74 achieved, 21 not achieved. 2026: 101 achieved, 33 not achieved"
+                aria-label={`DEV SLA ${prevYear}: ${devAnnualData.prev.ok} achieved, ${devAnnualData.prev.miss} not achieved. ${selectedYear}: ${devAnnualData.curr.ok} achieved, ${devAnnualData.curr.miss} not achieved`}
                 style={{
                   flex: 1,
                   minHeight: 260,
@@ -513,10 +678,10 @@ export function TabSla({
                     color: "var(--chart-axis)",
                   }}
                 >
-                  <span style={{ position: "absolute", right: 0, top: 0, transform: "translateY(-50%)" }}>140</span>
-                  <span style={{ position: "absolute", right: 0, top: "25%", transform: "translateY(-50%)" }}>105</span>
-                  <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)" }}>70</span>
-                  <span style={{ position: "absolute", right: 0, top: "75%", transform: "translateY(-50%)" }}>35</span>
+                  <span style={{ position: "absolute", right: 0, top: 0, transform: "translateY(-50%)" }}>{devAnnualData.ceiling}</span>
+                  <span style={{ position: "absolute", right: 0, top: "25%", transform: "translateY(-50%)" }}>{Math.round(devAnnualData.ceiling * 0.75)}</span>
+                  <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)" }}>{Math.round(devAnnualData.ceiling * 0.5)}</span>
+                  <span style={{ position: "absolute", right: 0, top: "75%", transform: "translateY(-50%)" }}>{Math.round(devAnnualData.ceiling * 0.25)}</span>
                   <span style={{ position: "absolute", right: 0, top: "100%", transform: "translateY(-50%)" }}>0</span>
                 </div>
 
@@ -534,31 +699,33 @@ export function TabSla({
                   <div style={{ position: "absolute", left: 0, right: 0, bottom: "75%", borderTop: "1px solid var(--chart-grid)" }} />
                   <div style={{ position: "absolute", left: 0, right: 0, bottom: "100%", borderTop: "1px solid var(--chart-grid)" }} />
 
-                  {/* 2025 Column: Total 95 (74 achieved, 21 not achieved) */}
+                  {/* Prev Year Column */}
                   <button
                     type="button"
                     className="hv"
                     onClick={() =>
                       setActiveModal({
                         type: "stage",
-                        title: "DEV SLA 2025",
-                        subtitle: "74 achieved, 21 not achieved",
+                        title: `DEV SLA ${prevYear}`,
+                        subtitle: `${devAnnualData.prev.ok} achieved, ${devAnnualData.prev.miss} not achieved`,
                         stageData: {
-                          name: "DEV SLA 2025",
-                          pct: "78%",
-                          data: 95,
-                          ok: 74,
-                          miss: 21,
+                          name: `DEV SLA ${prevYear}`,
+                          pct: `${devAnnualData.prev.rate}%`,
+                          data: devAnnualData.prev.tot,
+                          ok: devAnnualData.prev.ok,
+                          miss: devAnnualData.prev.miss,
+                          achievedProjects: devAnnualData.prev.achievedProjects,
+                          missedProjects: devAnnualData.prev.missedProjects,
                         },
                       })
                     }
-                    aria-label="DEV SLA 2025, klik untuk detail"
+                    aria-label={`DEV SLA ${prevYear}, klik untuk detail`}
                     style={{
                       position: "absolute",
                       left: "17%",
                       width: "26%",
                       bottom: 0,
-                      height: "67.86%",
+                      height: `${Math.min(100, Math.round((devAnnualData.prev.tot / devAnnualData.ceiling) * 100))}%`,
                       background: "none",
                       border: 0,
                       padding: 0,
@@ -572,7 +739,7 @@ export function TabSla({
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        height: "77.89%",
+                        height: `${devAnnualData.prev.tot > 0 ? (devAnnualData.prev.ok / devAnnualData.prev.tot) * 100 : 0}%`,
                         background: "var(--chart-blue-primary)",
                         display: "flex",
                         alignItems: "center",
@@ -581,7 +748,7 @@ export function TabSla({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      74
+                      {devAnnualData.prev.ok}
                     </span>
                     <span
                       className="bar"
@@ -590,7 +757,7 @@ export function TabSla({
                         left: 0,
                         right: 0,
                         top: 0,
-                        height: "22.11%",
+                        height: `${devAnnualData.prev.tot > 0 ? (devAnnualData.prev.miss / devAnnualData.prev.tot) * 100 : 0}%`,
                         background: "var(--chart-red)",
                         borderRadius: "6px 6px 0 0",
                         display: "flex",
@@ -600,7 +767,7 @@ export function TabSla({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      21
+                      {devAnnualData.prev.miss}
                     </span>
                     <span
                       style={{
@@ -612,63 +779,65 @@ export function TabSla({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      78%
+                      {devAnnualData.prev.rate}%
                     </span>
                     <span
                       className="tip tipcard"
                       style={{ left: "calc(100% + 12px)", top: 0 }}
                     >
                       <span className="tipcard__h">
-                        <span>Tahun 2025</span>
+                        <span>Tahun {prevYear}</span>
                         <span className="dd-pill dd-pill--blue">
                           <span className="dd-pill__dot" />
-                          78% SLA
+                          {devAnnualData.prev.rate}% SLA
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Jumlah data</span>
-                        <span>95 proyek</span>
+                        <span>{devAnnualData.prev.tot} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Achieved</span>
                         <span style={{ color: "var(--status-green-fg)" }}>
-                          74 proyek
+                          {devAnnualData.prev.ok} proyek
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Not achieved</span>
                         <span style={{ color: "var(--status-red-fg)" }}>
-                          21 proyek
+                          {devAnnualData.prev.miss} proyek
                         </span>
                       </span>
                     </span>
                   </button>
 
-                  {/* 2026 Column: Total 134 (101 achieved, 33 not achieved) */}
+                  {/* Current Year Column */}
                   <button
                     type="button"
                     className="hv"
                     onClick={() =>
                       setActiveModal({
                         type: "stage",
-                        title: "DEV SLA 2026",
-                        subtitle: "101 achieved, 33 not achieved",
+                        title: `DEV SLA ${selectedYear}`,
+                        subtitle: `${devAnnualData.curr.ok} achieved, ${devAnnualData.curr.miss} not achieved`,
                         stageData: {
-                          name: "DEV SLA 2026",
-                          pct: "75%",
-                          data: 134,
-                          ok: 101,
-                          miss: 33,
+                          name: `DEV SLA ${selectedYear}`,
+                          pct: `${devAnnualData.curr.rate}%`,
+                          data: devAnnualData.curr.tot,
+                          ok: devAnnualData.curr.ok,
+                          miss: devAnnualData.curr.miss,
+                          achievedProjects: devAnnualData.curr.achievedProjects,
+                          missedProjects: devAnnualData.curr.missedProjects,
                         },
                       })
                     }
-                    aria-label="DEV SLA 2026, klik untuk detail"
+                    aria-label={`DEV SLA ${selectedYear}, klik untuk detail`}
                     style={{
                       position: "absolute",
                       left: "57%",
                       width: "26%",
                       bottom: 0,
-                      height: "95.71%",
+                      height: `${Math.min(100, Math.round((devAnnualData.curr.tot / devAnnualData.ceiling) * 100))}%`,
                       background: "none",
                       border: 0,
                       padding: 0,
@@ -682,7 +851,7 @@ export function TabSla({
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        height: "75.37%",
+                        height: `${devAnnualData.curr.tot > 0 ? (devAnnualData.curr.ok / devAnnualData.curr.tot) * 100 : 0}%`,
                         background: "var(--chart-blue-primary)",
                         display: "flex",
                         alignItems: "center",
@@ -691,7 +860,7 @@ export function TabSla({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      101
+                      {devAnnualData.curr.ok}
                     </span>
                     <span
                       className="bar"
@@ -700,7 +869,7 @@ export function TabSla({
                         left: 0,
                         right: 0,
                         top: 0,
-                        height: "24.63%",
+                        height: `${devAnnualData.curr.tot > 0 ? (devAnnualData.curr.miss / devAnnualData.curr.tot) * 100 : 0}%`,
                         background: "var(--chart-red)",
                         borderRadius: "6px 6px 0 0",
                         display: "flex",
@@ -710,7 +879,7 @@ export function TabSla({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      33
+                      {devAnnualData.curr.miss}
                     </span>
                     <span
                       style={{
@@ -722,33 +891,33 @@ export function TabSla({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      75%
+                      {devAnnualData.curr.rate}%
                     </span>
                     <span
                       className="tip tipcard"
                       style={{ right: "calc(100% + 12px)", top: 0 }}
                     >
                       <span className="tipcard__h">
-                        <span>Tahun 2026</span>
+                        <span>Tahun {selectedYear}</span>
                         <span className="dd-pill dd-pill--blue">
                           <span className="dd-pill__dot" />
-                          75% SLA
+                          {devAnnualData.curr.rate}% SLA
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Jumlah data</span>
-                        <span>134 proyek</span>
+                        <span>{devAnnualData.curr.tot} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Achieved</span>
                         <span style={{ color: "var(--status-green-fg)" }}>
-                          101 proyek
+                          {devAnnualData.curr.ok} proyek
                         </span>
                       </span>
                       <span className="tipcard__r">
                         <span>Not achieved</span>
                         <span style={{ color: "var(--status-red-fg)" }}>
-                          33 proyek
+                          {devAnnualData.curr.miss} proyek
                         </span>
                       </span>
                     </span>
@@ -764,10 +933,10 @@ export function TabSla({
                   }}
                 >
                   <span style={{ position: "absolute", left: "30%", transform: "translateX(-50%)", top: 6 }}>
-                    2025
+                    {prevYear}
                   </span>
                   <span style={{ position: "absolute", left: "70%", transform: "translateX(-50%)", top: 6 }}>
-                    2026
+                    {selectedYear}
                   </span>
                 </div>
               </div>
@@ -812,7 +981,7 @@ export function TabSla({
                 <path d="M12 9v4M12 17h.01" />
                 <circle cx="12" cy="12" r="10" />
               </svg>
-              &nbsp;5 warnings
+              &nbsp;{multiStageFailures.length} warnings
             </span>
           </div>
 
@@ -828,38 +997,44 @@ export function TabSla({
             <div className="dd-table__th">Last status</div>
           </div>
 
-          {multiStageFailures.map((m, idx) => (
-            <div
-              key={idx}
-              className="dd-table__row"
-              style={{
-                gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.6fr) 96px minmax(0, 1.4fr)",
-                minHeight: 64,
-                cursor: "default",
-              }}
-            >
-              <div className="dd-table__td">
-                <div className="dd-table__primary">{m.name}</div>
-              </div>
-              <div className="dd-table__td" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {m.stages.map((st) => (
-                  <span key={st} className="dd-pill dd-pill--red">
-                    <span className="dd-pill__dot" />
-                    {st}
-                  </span>
-                ))}
-              </div>
-              <div className="dd-table__td">
-                <span className="dd-table__date">{m.year}</span>
-              </div>
-              <div className="dd-table__td">
-                <span className="dd-pill dd-pill--blue">
-                  <span className="dd-pill__dot" />
-                  {m.status}
-                </span>
-              </div>
+          {multiStageFailures.length === 0 ? (
+            <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-secondary)", font: "var(--text-body)" }}>
+              Tidak ada kegagalan multi-tahap pada tahun {selectedYear}
             </div>
-          ))}
+          ) : (
+            multiStageFailures.map((m, idx) => (
+              <div
+                key={idx}
+                className="dd-table__row"
+                style={{
+                  gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.6fr) 96px minmax(0, 1.4fr)",
+                  minHeight: 64,
+                  cursor: "default",
+                }}
+              >
+                <div className="dd-table__td">
+                  <div className="dd-table__primary">{m.name}</div>
+                </div>
+                <div className="dd-table__td" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {m.stages.map((st) => (
+                    <span key={st} className="dd-pill dd-pill--red">
+                      <span className="dd-pill__dot" />
+                      {st}
+                    </span>
+                  ))}
+                </div>
+                <div className="dd-table__td">
+                  <span className="dd-table__date">{m.year}</span>
+                </div>
+                <div className="dd-table__td">
+                  <span className="dd-pill dd-pill--blue">
+                    <span className="dd-pill__dot" />
+                    {m.status}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
         </section>
 
         {/* Table 2: SLA Phase Delay Tracker */}
@@ -871,7 +1046,7 @@ export function TabSla({
                 <span className="dd-count">{filteredDelays.length}</span>
               </div>
               <p className="dd-table__hint">
-                Klik baris untuk melihat detail · rata-rata keterlambatan 17 hari
+                Klik baris untuk melihat detail · rata-rata keterlambatan {avgDelay} hari
                 {selectedCause ? ` · filter: ${selectedCause}` : ""}
               </p>
             </div>

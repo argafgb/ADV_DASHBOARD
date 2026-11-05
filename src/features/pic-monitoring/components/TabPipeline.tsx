@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardDataset, SanitizedProject } from "../types/types";
+import { buildMonthlyProjectPipeline } from "../services/project-data";
 import { PicMonitoringModals, type ModalPayload } from "./PicMonitoringModals";
 
 interface TabPipelineProps {
@@ -22,47 +23,150 @@ export function TabPipeline({
   const [qPage, setQPage] = useState(1);
 
   const selectedYear = endYear || startYear || 2026;
+  const prevYear = selectedYear - 1;
 
-  // Real or computed project counts matching prototype Pict 2
-  const totalCount =
-    filteredProjects.length > 0 && filteredProjects.length < 500
-      ? filteredProjects.length
-      : 165;
+  // Real project breakdown
+  const yearProjects = useMemo(() => {
+    const list = filteredProjects.filter((p) => {
+      const y = String(p._year || p.Year || "");
+      return y === String(selectedYear);
+    });
+    return list.length > 0 ? list : filteredProjects;
+  }, [filteredProjects, selectedYear]);
+
+  const activeProjects = useMemo(() => {
+    return yearProjects.filter((p) => {
+      const st = String(p["Last Status"] || "").toLowerCase();
+      return !st.includes("canceled") && !st.includes("cancelled") && st !== "live";
+    });
+  }, [yearProjects]);
+
   const completedProjects = useMemo(() => {
-    return filteredProjects.filter((p) => {
+    return yearProjects.filter((p) => {
       const st = String(p["Last Status"] || "").toLowerCase();
       return st === "live" || st.includes("monitoring");
     });
-  }, [filteredProjects]);
+  }, [yearProjects]);
 
-  const completedCount =
-    completedProjects.length > 0 && completedProjects.length < 500
-      ? completedProjects.length
-      : 71;
-  const activeCount = 94;
+  const inProgProjs = useMemo(() => {
+    return activeProjects.filter((p) => {
+      const st = String(p["Last Status"] || "").toLowerCase();
+      return !st.includes("monitoring") && !st.includes("queue") && !st.includes("pending") && !st.includes("uat") && !st.includes("hold");
+    });
+  }, [activeProjects]);
 
-  // Completion Rate monthly data
+  const monProjs = useMemo(() => {
+    return activeProjects.filter((p) => {
+      const st = String(p["Last Status"] || "").toLowerCase();
+      return st.includes("monitoring");
+    });
+  }, [activeProjects]);
+
+  const queueProjs = useMemo(() => {
+    return activeProjects.filter((p) => {
+      const st = String(p["Last Status"] || "").toLowerCase();
+      return st.includes("queue") || st.includes("pending");
+    });
+  }, [activeProjects]);
+
+  const uatProjs = useMemo(() => {
+    return activeProjects.filter((p) => {
+      const st = String(p["Last Status"] || "").toLowerCase();
+      return st.includes("uat");
+    });
+  }, [activeProjects]);
+
+  const holdProjs = useMemo(() => {
+    return activeProjects.filter((p) => {
+      const st = String(p["Last Status"] || "").toLowerCase();
+      return st.includes("hold");
+    });
+  }, [activeProjects]);
+
+  const totalCount = yearProjects.length;
+  const completedCount = completedProjects.length;
+  const activeCount = activeProjects.length;
+
+  const prevYearCount = useMemo(() => {
+    return filteredProjects.filter((p) => {
+      const y = String(p._year || p.Year || "");
+      return y === String(prevYear);
+    }).length;
+  }, [filteredProjects, prevYear]);
+
+  const totalDeltaPct = useMemo(() => {
+    if (prevYearCount === 0) return 0;
+    return Math.round(((totalCount - prevYearCount) / prevYearCount) * 100);
+  }, [totalCount, prevYearCount]);
+
+  // Completion Rate monthly data (derived dynamically from database)
+  const pipelineCurr = useMemo(
+    () => buildMonthlyProjectPipeline(filteredProjects, selectedYear, 1, 12),
+    [filteredProjects, selectedYear],
+  );
+  const pipelinePrev = useMemo(
+    () => buildMonthlyProjectPipeline(filteredProjects, prevYear, 1, 12),
+    [filteredProjects, prevYear],
+  );
+
+  const maxVal = useMemo(() => {
+    let peak = 1;
+    for (let m = 1; m <= 12; m++) {
+      const c1 = pipelineCurr.liveByMonth[m]?.length || 0;
+      const c2 = pipelinePrev.liveByMonth[m]?.length || 0;
+      if (c1 > peak) peak = c1;
+      if (c2 > peak) peak = c2;
+    }
+    return Math.max(20, Math.ceil(peak / 5) * 5);
+  }, [pipelineCurr, pipelinePrev]);
+
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-  const a25 = [2, 1, 4, 8, 4, 6, 11, 5, 17, 6, 8, 14];
-  const b26 = [7, 6, 10, 5, 21, 12, 21, 17, 12, 12];
+  const completion = useMemo(() => {
+    return monthNames.map((n, i) => {
+      const m = i + 1;
+      const valPrev = pipelinePrev.liveByMonth[m]?.length || 0;
+      const valCurr = pipelineCurr.liveByMonth[m]?.length || 0;
+      return {
+        n,
+        a: valPrev,
+        ha: `${Math.round((valPrev / maxVal) * 190)}px`,
+        t25: `${n} ${prevYear} · ${valPrev} go-live`,
+        has: true,
+        b: valCurr,
+        hb: `${Math.round((valCurr / maxVal) * 190)}px`,
+        t26: `${n} ${selectedYear} · ${valCurr} go-live`,
+      };
+    });
+  }, [pipelinePrev, pipelineCurr, maxVal, prevYear, selectedYear]);
 
-  const completion = monthNames.map((n, i) => {
-    const val25 = a25[i];
-    const val26 = b26[i];
-    const maxVal = 24;
-    return {
-      n,
-      a: val25,
-      ha: `${Math.round((val25 / maxVal) * 190)}px`,
-      t25: `${n} 2025 · ${val25} go-live`,
-      has: val26 !== undefined,
-      b: val26,
-      hb: val26 !== undefined ? `${Math.round((val26 / maxVal) * 190)}px` : "0px",
-      t26: `${n} 2026 · ${val26} go-live`,
+  // Delivery by intake year
+  const deliveryData = useMemo(() => {
+    const getStats = (yr: number) => {
+      const projs = filteredProjects.filter((p) => {
+        const y = String(p._year || p.Year || "");
+        return y === String(yr);
+      });
+      const comp = projs.filter((p) => {
+        const st = String(p["Last Status"] || "").toLowerCase();
+        return st === "live" || st.includes("monitoring");
+      }).length;
+      const act = projs.filter((p) => {
+        const st = String(p["Last Status"] || "").toLowerCase();
+        return !st.includes("canceled") && !st.includes("cancelled") && st !== "live";
+      }).length;
+      const tot = projs.length;
+      return { tot, comp, act };
     };
-  });
 
-  // Queue Data
+    const prev = getStats(prevYear);
+    const curr = getStats(selectedYear);
+    const maxTot = Math.max(prev.tot, curr.tot, 1);
+    const ceiling = Math.max(180, Math.ceil(maxTot / 40) * 40);
+
+    return { prev, curr, ceiling };
+  }, [filteredProjects, prevYear, selectedYear]);
+
+  // Queue Data from real filtered projects
   interface QueueItem {
     no: number;
     tk: string;
@@ -72,41 +176,18 @@ export function TabPipeline({
   }
 
   const queueAll: QueueItem[] = useMemo(() => {
-    const queueProjects = filteredProjects.filter((p) => {
-      const st = String(p["Last Status"] || "").toLowerCase();
-      return st.includes("queue") || st.includes("pending");
-    });
-
-    if (queueProjects.length > 0) {
-      return queueProjects.map((p, idx) => ({
+    return filteredProjects
+      .filter((p) => {
+        const st = String(p["Last Status"] || "").toLowerCase();
+        return st.includes("queue") || st.includes("pending");
+      })
+      .map((p, idx) => ({
         no: idx + 1,
-        tk: p.Ticket || `2610${String(idx + 1).padStart(4, "0")}`,
-        name: p["Project Name"],
-        div: p["Owner Div"] || p["Owner Division"] || p["Owner Name"] || "Operasional Cash Pickup",
+        tk: p.Ticket || "-",
+        name: p["Project Name"] || "Untitled Project",
+        div: p["Owner Div"] || p["Owner Division"] || p["Owner Name"] || "-",
         project: p,
       }));
-    }
-
-    // Sample queue data matching prototype exactly
-    const demoQueue: QueueItem[] = [
-      { no: 1, tk: "26100007", name: "Penambahan Kolom Laporan Saldo Bank", div: "Sales & Marketing" },
-      { no: 2, tk: "26090069", name: "Enhancement Report Custom ATM Phase 2", div: "Operasional Cash Pickup" },
-      { no: 3, tk: "26090035", name: "Approval Digital Perubahan Data Manifest Pengiriman", div: "Operasional Cash Pickup" },
-      { no: 4, tk: "26080011", name: "Tambah Filter Pencarian Slip Gaji Digital", div: "Finance & Accounting" },
-      { no: 5, tk: "26080030", name: "Pembuatan Modul Audit Trail Transaksi", div: "Logistik & Armada" },
-      { no: 6, tk: "26080086", name: "Redesign Alur Reimbursement Online", div: "Operasional Cash Pickup" },
-      { no: 7, tk: "26070050", name: "Implementasi Master Customer Baru", div: "Legal & Compliance" },
-      { no: 8, tk: "26050025", name: "Perbaikan Flow Approval Saldo Bank", div: "Human Capital" },
-      { no: 9, tk: "26030015", name: "Penambahan Kolom Laporan Master Customer", div: "Logistik & Armada" },
-      { no: 10, tk: "26020034", name: "Pembuatan Modul PIC FLM", div: "Operasional Cash Pickup" },
-      { no: 11, tk: "26010015", name: "Pembuatan Modul Manifest Pengiriman", div: "Treasury" },
-      { no: 12, tk: "26010009", name: "Tambah Filter Pencarian Kartu Tertelan", div: "Sales & Marketing" },
-      { no: 13, tk: "25120043", name: "Approval Digital Perubahan Data Approval PMA v2", div: "Teknologi Informasi" },
-      { no: 14, tk: "25080029", name: "Pengembangan Core Batch Settlement", div: "Finance & Accounting" },
-      { no: 15, tk: "25060012", name: "Sistem Logistik Suku Cadang Kendaraan", div: "Logistik & Armada" },
-      { no: 16, tk: "25040008", name: "Penyelarasan SOP Pengajuan Dana Operasional", div: "Human Capital" },
-    ];
-    return demoQueue;
   }, [filteredProjects]);
 
   const qSize = 5;
@@ -143,11 +224,11 @@ export function TabPipeline({
                   pct: "100%",
                   pctCls: "",
                   hasPct: true,
-                  sub: `${totalCount} proyek terdaftar di sistem · ▲ 42% vs 116 di 2025`,
+                  sub: `${totalCount} proyek terdaftar di sistem · ${totalDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(totalDeltaPct)}% vs ${prevYearCount} di ${prevYear}`,
                   note: `Total ${totalCount} proyek tercatat pada pipeline pengajuan tahun ${selectedYear}.`,
                   rows: [
                     { name: String(selectedYear), val: `${totalCount} proyek`, w: "100%", color: "var(--chart-blue-primary)" },
-                    { name: String(selectedYear - 1), val: "116 proyek", w: `${Math.min(100, Math.round((116 / totalCount) * 100))}%`, color: "var(--chart-blue-light)" },
+                    { name: String(prevYear), val: `${prevYearCount} proyek`, w: `${totalCount > 0 ? Math.min(100, Math.round((prevYearCount / totalCount) * 100)) : 0}%`, color: "var(--chart-blue-light)" },
                   ],
                   goLabel: "Buka Project list",
                   onGo: () => router.push("/dashboard/pic-monitoring/projects"),
@@ -169,10 +250,12 @@ export function TabPipeline({
               </span>
               <span className="dd-kpi__label">Total projects</span>
             </div>
-            <span className="dd-kpi__delta dd-delta dd-delta--on-accent">▲ 42%</span>
+            <span className="dd-kpi__delta dd-delta dd-delta--on-accent">
+              {totalDeltaPct >= 0 ? `▲ ${totalDeltaPct}%` : `▼ ${Math.abs(totalDeltaPct)}%`}
+            </span>
             <div className="dd-kpi__row">
               <span className="dd-kpi__value">{totalCount}</span>
-              <span className="dd-kpi__sub">vs 116 di 2025</span>
+              <span className="dd-kpi__sub">vs {prevYearCount} di {prevYear}</span>
             </div>
           </button>
 
@@ -249,12 +332,17 @@ export function TabPipeline({
             className="dd-kpi dd-kpi--click dd-kpi--span-full"
             style={{ textAlign: "left" }}
             onClick={() => {
-              const inProgN = 51;
-              const monN = 17;
-              const queueN = 16;
-              const uatN = 7;
-              const holdN = 3;
-              const pctVal = Math.round((activeCount / totalCount) * 100);
+              const inProgN = inProgProjs.length;
+              const monN = monProjs.length;
+              const queueN = queueProjs.length;
+              const uatN = uatProjs.length;
+              const holdN = holdProjs.length;
+              const pctVal = totalCount > 0 ? Math.round((activeCount / totalCount) * 100) : 0;
+              const inProgPct = activeCount > 0 ? Math.round((inProgN / activeCount) * 100) : 0;
+              const monPct = activeCount > 0 ? Math.round((monN / activeCount) * 100) : 0;
+              const queuePct = activeCount > 0 ? Math.round((queueN / activeCount) * 100) : 0;
+              const uatPct = activeCount > 0 ? Math.round((uatN / activeCount) * 100) : 0;
+              const holdPct = activeCount > 0 ? Math.round((holdN / activeCount) * 100) : 0;
 
               setActiveModal({
                 type: "kpi",
@@ -271,75 +359,79 @@ export function TabPipeline({
                   rows: [
                     {
                       name: "In progress",
-                      val: `${inProgN} proyek · 54%`,
-                      w: "100%",
+                      val: `${inProgN} proyek · ${inProgPct}%`,
+                      w: `${inProgPct}%`,
                       color: "var(--chart-blue-primary)",
                       cur: "pointer",
                       onClick: () =>
                         setActiveModal({
                           type: "inprog",
                           title: "In progress projects",
-                          subtitle: "51 proyek di FSD, DEV, SIT dan change request",
+                          subtitle: `${inProgN} proyek di FSD, DEV, SIT dan change request`,
                         }),
                     },
                     {
                       name: "Monitoring",
-                      val: `${monN} proyek · 18%`,
-                      w: "33.3%",
+                      val: `${monN} proyek · ${monPct}%`,
+                      w: `${monPct}%`,
                       color: "var(--chart-green)",
                       cur: "pointer",
                       onClick: () =>
                         setActiveModal({
                           type: "group",
                           title: "Monitoring",
-                          subtitle: "17 proyek aktif",
+                          subtitle: `${monN} proyek aktif`,
                           groupName: "Monitoring",
-                          groupCount: 17,
+                          groupCount: monN,
+                          groupProjects: monProjs,
                         }),
                     },
                     {
                       name: "Queue",
-                      val: `${queueN} proyek · 17%`,
-                      w: "31.4%",
+                      val: `${queueN} proyek · ${queuePct}%`,
+                      w: `${queuePct}%`,
                       color: "var(--chart-amber)",
                       cur: "pointer",
                       onClick: () =>
                         setActiveModal({
                           type: "group",
                           title: "Queue",
-                          subtitle: "16 proyek aktif",
+                          subtitle: `${queueN} proyek aktif`,
                           groupName: "Queue",
-                          groupCount: 16,
+                          groupCount: queueN,
+                          groupProjects: queueProjs,
                         }),
                     },
                     {
                       name: "UAT",
-                      val: `${uatN} proyek · 7%`,
-                      w: "13.7%",
+                      val: `${uatN} proyek · ${uatPct}%`,
+                      w: `${uatPct}%`,
                       color: "var(--chart-blue-light)",
                       cur: "pointer",
                       onClick: () =>
                         setActiveModal({
                           type: "group",
                           title: "UAT",
-                          subtitle: "7 proyek aktif",
+                          subtitle: `${uatN} proyek aktif`,
                           groupName: "UAT",
-                          groupCount: 7,
+                          groupCount: uatN,
+                          groupProjects: uatProjs,
                         }),
                     },
                     {
                       name: "Hold",
-                      val: `${holdN} proyek · 3%`,
-                      w: "5.9%",
+                      val: `${holdN} proyek · ${holdPct}%`,
+                      w: `${holdPct}%`,
                       color: "var(--chart-neutral)",
                       cur: "pointer",
                       onClick: () =>
                         setActiveModal({
                           type: "group",
                           title: "Hold",
-                          subtitle: "3 proyek aktif",
+                          subtitle: `${holdN} proyek aktif`,
                           groupName: "Hold",
-                          groupCount: 3,
+                          groupCount: holdN,
+                          groupProjects: holdProjs,
                         }),
                     },
                   ],
@@ -392,14 +484,14 @@ export function TabPipeline({
                   className="dd-chart__dot"
                   style={{ background: "var(--chart-blue-light)" }}
                 />
-                2025
+                {prevYear}
               </span>
               <span className="dd-chart__legenditem">
                 <span
                   className="dd-chart__dot"
                   style={{ background: "var(--chart-blue-primary)" }}
                 />
-                2026
+                {selectedYear}
               </span>
             </div>
           </div>
@@ -420,8 +512,8 @@ export function TabPipeline({
                   width: 22,
                 }}
               >
-                <span>20</span>
-                <span>10</span>
+                <span>{maxVal}</span>
+                <span>{Math.round(maxVal / 2)}</span>
                 <span>0</span>
               </div>
 
@@ -548,44 +640,50 @@ export function TabPipeline({
               <div className="dd-table__th">Status</div>
             </div>
 
-            {queuePage.map((q) => (
-              <div
-                key={q.tk}
-                className="dd-table__row"
-                style={{
-                  gridTemplateColumns: "56px 110px minmax(0, 1fr) 190px 110px",
-                  cursor: "default",
-                }}
-              >
-                <div className="dd-table__td">
-                  <span className="dd-table__idx">{q.no}</span>
-                </div>
-                <div className="dd-table__td">
-                  <span style={{ font: "var(--text-cell-num)", color: "var(--text-secondary)" }}>
-                    {q.tk}
-                  </span>
-                </div>
-                <div className="dd-table__td">
-                  <div className="dd-table__primary">{q.name}</div>
-                </div>
-                <div className="dd-table__td">
-                  <span className="dd-chip dd-chip--entity">{q.div}</span>
-                </div>
-                <div className="dd-table__td">
-                  <span className="dd-pill dd-pill--amber">
-                    <span className="dd-pill__dot" />
-                    On Queue
-                  </span>
-                </div>
+            {queuePage.length === 0 ? (
+              <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-secondary)", font: "var(--text-body)" }}>
+                Tidak ada proyek dalam antrean
               </div>
-            ))}
+            ) : (
+              queuePage.map((q) => (
+                <div
+                  key={q.tk}
+                  className="dd-table__row"
+                  style={{
+                    gridTemplateColumns: "56px 110px minmax(0, 1fr) 190px 110px",
+                    cursor: "default",
+                  }}
+                >
+                  <div className="dd-table__td">
+                    <span className="dd-table__idx">{q.no}</span>
+                  </div>
+                  <div className="dd-table__td">
+                    <span style={{ font: "var(--text-cell-num)", color: "var(--text-secondary)" }}>
+                      {q.tk}
+                    </span>
+                  </div>
+                  <div className="dd-table__td">
+                    <div className="dd-table__primary">{q.name}</div>
+                  </div>
+                  <div className="dd-table__td">
+                    <span className="dd-chip dd-chip--entity">{q.div}</span>
+                  </div>
+                  <div className="dd-table__td">
+                    <span className="dd-pill dd-pill--amber">
+                      <span className="dd-pill__dot" />
+                      On Queue
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
 
             <div className="dd-table__foot">
               <span className="dd-table__count">
-                {queueRange} dari 15 contoh (total 16)
+                {qTotal === 0 ? "0 proyek" : `${queueRange} dari total ${qTotal} proyek`}
               </span>
               <div className="dd-pager">
-                {[1, 2, 3].map((n) => (
+                {Array.from({ length: Math.ceil(qTotal / qSize) || 1 }, (_, i) => i + 1).slice(0, 5).map((n) => (
                   <button
                     key={n}
                     type="button"
@@ -625,7 +723,7 @@ export function TabPipeline({
 
               <div
                 role="img"
-                aria-label="2025: 105 selesai dan 11 aktif. 2026: 71 selesai dan 94 aktif."
+                aria-label={`${prevYear}: ${deliveryData.prev.comp} selesai dan ${deliveryData.prev.act} aktif. ${selectedYear}: ${deliveryData.curr.comp} selesai dan ${deliveryData.curr.act} aktif.`}
                 style={{
                   flex: 1,
                   minHeight: 220,
@@ -643,10 +741,10 @@ export function TabPipeline({
                     color: "var(--chart-axis)",
                   }}
                 >
-                  <span style={{ position: "absolute", right: 0, top: 0, transform: "translateY(-50%)" }}>180</span>
-                  <span style={{ position: "absolute", right: 0, top: "25%", transform: "translateY(-50%)" }}>135</span>
-                  <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)" }}>90</span>
-                  <span style={{ position: "absolute", right: 0, top: "75%", transform: "translateY(-50%)" }}>45</span>
+                  <span style={{ position: "absolute", right: 0, top: 0, transform: "translateY(-50%)" }}>{deliveryData.ceiling}</span>
+                  <span style={{ position: "absolute", right: 0, top: "25%", transform: "translateY(-50%)" }}>{Math.round(deliveryData.ceiling * 0.75)}</span>
+                  <span style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)" }}>{Math.round(deliveryData.ceiling * 0.5)}</span>
+                  <span style={{ position: "absolute", right: 0, top: "75%", transform: "translateY(-50%)" }}>{Math.round(deliveryData.ceiling * 0.25)}</span>
                   <span style={{ position: "absolute", right: 0, top: "100%", transform: "translateY(-50%)" }}>0</span>
                 </div>
 
@@ -663,17 +761,17 @@ export function TabPipeline({
                   <div style={{ position: "absolute", left: 0, right: 0, bottom: "75%", borderTop: "1px solid var(--chart-grid)" }} />
                   <div style={{ position: "absolute", left: 0, right: 0, bottom: "100%", borderTop: "1px solid var(--chart-grid)" }} />
 
-                  {/* 2025 Column: 116 (Active 11, Selesai 105) */}
+                  {/* Prev Year Column */}
                   <button
                     type="button"
                     className="hv"
-                    aria-label="Tahun 2025, 116 proyek"
+                    aria-label={`Tahun ${prevYear}, ${deliveryData.prev.tot} proyek`}
                     style={{
                       position: "absolute",
                       left: "17%",
                       width: "26%",
                       bottom: 0,
-                      height: "64.44%",
+                      height: `${Math.min(100, Math.round((deliveryData.prev.tot / deliveryData.ceiling) * 100))}%`,
                       background: "none",
                       border: 0,
                       padding: 0,
@@ -690,77 +788,82 @@ export function TabPipeline({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      116
+                      {deliveryData.prev.tot}
                     </span>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        height: "9.48%",
-                        background: "var(--chart-amber)",
-                        borderRadius: "6px 6px 0 0",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--text-on-accent)",
-                        font: "var(--text-cell-num)",
-                      }}
-                    >
-                      11
-                    </div>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        height: "90.52%",
-                        background: "var(--chart-green)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--text-on-accent)",
-                        font: "var(--text-cell-num)",
-                      }}
-                    >
-                      105
-                    </div>
+                    {deliveryData.prev.act > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: 0,
+                          height: `${(deliveryData.prev.act / deliveryData.prev.tot) * 100}%`,
+                          background: "var(--chart-amber)",
+                          borderRadius: "6px 6px 0 0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--text-on-accent)",
+                          font: "var(--text-cell-num)",
+                        }}
+                      >
+                        {deliveryData.prev.act}
+                      </div>
+                    )}
+                    {deliveryData.prev.comp > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: `${(deliveryData.prev.comp / deliveryData.prev.tot) * 100}%`,
+                          background: "var(--chart-green)",
+                          borderRadius: deliveryData.prev.act === 0 ? "6px 6px 0 0" : 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--text-on-accent)",
+                          font: "var(--text-cell-num)",
+                        }}
+                      >
+                        {deliveryData.prev.comp}
+                      </div>
+                    )}
                     <span
                       className="tip tipcard"
                       style={{ left: -64, top: 34 }}
                     >
                       <span className="tipcard__h">
-                        <span>Tahun 2025</span>
-                        <span className="dd-pill dd-pill--blue">116 proyek</span>
+                        <span>Tahun {prevYear}</span>
+                        <span className="dd-pill dd-pill--blue">{deliveryData.prev.tot} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Project volume</span>
-                        <span>116 proyek</span>
+                        <span>{deliveryData.prev.tot} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Selesai</span>
-                        <span style={{ color: "var(--status-green-fg)" }}>105 proyek</span>
+                        <span style={{ color: "var(--status-green-fg)" }}>{deliveryData.prev.comp} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Aktif</span>
-                        <span style={{ color: "var(--status-amber-fg)" }}>11 proyek</span>
+                        <span style={{ color: "var(--status-amber-fg)" }}>{deliveryData.prev.act} proyek</span>
                       </span>
                     </span>
                   </button>
 
-                  {/* 2026 Column: 165 (Active 94, Selesai 71) */}
+                  {/* Current Year Column */}
                   <button
                     type="button"
                     className="hv"
-                    aria-label="Tahun 2026, 165 proyek"
+                    aria-label={`Tahun ${selectedYear}, ${deliveryData.curr.tot} proyek`}
                     style={{
                       position: "absolute",
                       left: "57%",
                       width: "26%",
                       bottom: 0,
-                      height: "91.67%",
+                      height: `${Math.min(100, Math.round((deliveryData.curr.tot / deliveryData.ceiling) * 100))}%`,
                       background: "none",
                       border: 0,
                       padding: 0,
@@ -777,62 +880,67 @@ export function TabPipeline({
                         font: "var(--text-cell-num)",
                       }}
                     >
-                      165
+                      {deliveryData.curr.tot}
                     </span>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        top: 0,
-                        height: "56.97%",
-                        background: "var(--chart-amber)",
-                        borderRadius: "6px 6px 0 0",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--text-on-accent)",
-                        font: "var(--text-cell-num)",
-                      }}
-                    >
-                      94
-                    </div>
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        height: "43.03%",
-                        background: "var(--chart-green)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--text-on-accent)",
-                        font: "var(--text-cell-num)",
-                      }}
-                    >
-                      71
-                    </div>
+                    {deliveryData.curr.act > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          top: 0,
+                          height: `${(deliveryData.curr.act / deliveryData.curr.tot) * 100}%`,
+                          background: "var(--chart-amber)",
+                          borderRadius: "6px 6px 0 0",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--text-on-accent)",
+                          font: "var(--text-cell-num)",
+                        }}
+                      >
+                        {deliveryData.curr.act}
+                      </div>
+                    )}
+                    {deliveryData.curr.comp > 0 && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: `${(deliveryData.curr.comp / deliveryData.curr.tot) * 100}%`,
+                          background: "var(--chart-green)",
+                          borderRadius: deliveryData.curr.act === 0 ? "6px 6px 0 0" : 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--text-on-accent)",
+                          font: "var(--text-cell-num)",
+                        }}
+                      >
+                        {deliveryData.curr.comp}
+                      </div>
+                    )}
                     <span
                       className="tip tipcard"
                       style={{ right: -28, top: 34 }}
                     >
                       <span className="tipcard__h">
-                        <span>Tahun 2026</span>
-                        <span className="dd-pill dd-pill--blue">165 proyek</span>
+                        <span>Tahun {selectedYear}</span>
+                        <span className="dd-pill dd-pill--blue">{deliveryData.curr.tot} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Project volume</span>
-                        <span>165 proyek</span>
+                        <span>{deliveryData.curr.tot} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Selesai</span>
-                        <span style={{ color: "var(--status-green-fg)" }}>71 proyek</span>
+                        <span style={{ color: "var(--status-green-fg)" }}>{deliveryData.curr.comp} proyek</span>
                       </span>
                       <span className="tipcard__r">
                         <span>Aktif</span>
-                        <span style={{ color: "var(--status-amber-fg)" }}>94 proyek</span>
+                        <span style={{ color: "var(--status-amber-fg)" }}>{deliveryData.curr.act} proyek</span>
                       </span>
                     </span>
                   </button>
@@ -847,10 +955,10 @@ export function TabPipeline({
                   }}
                 >
                   <span style={{ position: "absolute", left: "30%", transform: "translateX(-50%)", top: 6 }}>
-                    2025
+                    {prevYear}
                   </span>
                   <span style={{ position: "absolute", left: "70%", transform: "translateX(-50%)", top: 6 }}>
-                    2026
+                    {selectedYear}
                   </span>
                 </div>
               </div>

@@ -3,6 +3,9 @@
 import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { DashboardDataset, SanitizedProject } from "../types/types";
+import { formatPeriodLabel, monthWindowOf } from "../utils/period-filter";
+import { evaluateStageSla, isStageRealizedInMonths } from "../utils/sla-policy";
+import { getProjectIntakeYearMonth } from "../services/project-data";
 import { PicMonitoringModals, type ModalPayload, getTone } from "./PicMonitoringModals";
 
 interface TabCategoryProps {
@@ -19,16 +22,49 @@ interface TabCategoryProps {
 export function TabCategory({
   filteredProjects = [],
   rawProjects = [],
+  slaProjects = [],
   startYear = 2026,
   endYear = 2026,
+  month = "ALL",
 }: TabCategoryProps) {
   const router = useRouter();
   const [activeModal, setActiveModal] = useState<ModalPayload | null>(null);
   const [typeTab, setTypeTab] = useState<"semua" | "aktif">("semua");
   const selectedYear = endYear || startYear || 2026;
+  const monthWindow = useMemo(() => monthWindowOf(month), [month]);
+  const periodLabel = formatPeriodLabel(selectedYear, monthWindow);
+  const slaPeriod = useMemo(
+    () => ({
+      year: selectedYear,
+      months: monthWindow,
+    }),
+    [selectedYear, monthWindow],
+  );
 
-  const allProjects = rawProjects.length > 0 ? rawProjects : filteredProjects;
-  const totalRegistered = allProjects.length || 557;
+  const baseProjects = rawProjects.length > 0 ? rawProjects : filteredProjects;
+  const allProjects = useMemo(() => {
+    if (monthWindow === null) return baseProjects;
+    return baseProjects.filter((p) => {
+      const intake = getProjectIntakeYearMonth(p);
+      if (intake && intake.year === selectedYear) {
+        if (
+          intake.month >= monthWindow.startMonth &&
+          intake.month <= monthWindow.endMonth
+        ) {
+          return true;
+        }
+      }
+      const stages = ["FSD", "DEV", "SIT", "UAT", "LIVE"] as const;
+      for (const st of stages) {
+        if (isStageRealizedInMonths(p, st, selectedYear, monthWindow)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [baseProjects, selectedYear, monthWindow]);
+
+  const totalRegistered = allProjects.length;
 
   // Active projects
   const activeProjects = useMemo(() => {
@@ -75,67 +111,56 @@ export function TabCategory({
         }));
     }
 
-    // Default sample matching prototype (media_1793743499565_8bd0c395.png)
-    const ST: [string, number, string][] = [
-      ["Live", 505, "var(--chart-green)"],
-      ["Dev On Progress", 15, "var(--chart-blue-primary)"],
-      ["On Queue", 7, "var(--chart-amber)"],
-      ["Change Request On Progress", 6, "var(--chart-blue-light)"],
-      ["SIT On Progress", 5, "var(--chart-blue-primary)"],
-      ["Live On Queue", 5, "var(--chart-amber)"],
-      ["FSD On Progress", 5, "var(--chart-blue-primary)"],
-      ["UAT On Queue", 3, "var(--chart-blue-light)"],
-      ["UAT On Progress", 3, "var(--chart-blue-light)"],
-      ["Dev On Queue", 2, "var(--chart-blue-primary)"],
-    ];
-    return ST.map(([name, n, color]) => ({
-      name,
-      n,
-      color,
-      p: `${Math.round((n / 557) * 100)}%`,
-      w: `${((n / 557) * 100).toFixed(2)}%`,
-      projects: [],
-    }));
+    return [];
   }, [allProjects]);
 
-  // Projects by Type (Pict 3: Blue for Enhance Kecil, Green for Project Utama, Amber for Approval Digital)
+  // Projects by Type
   const typeData = useMemo(() => {
     const targetPool = typeTab === "semua" ? allProjects : activeProjects;
     let enhanceCount = 0;
     let utamaCount = 0;
     let approvalCount = 0;
+    const enhanceProjs: SanitizedProject[] = [];
+    const utamaProjs: SanitizedProject[] = [];
+    const approvalProjs: SanitizedProject[] = [];
 
     targetPool.forEach((p) => {
       const tp = String(p["Type Project"] || "").toLowerCase();
-      if (tp.includes("enhance")) enhanceCount++;
-      else if (tp.includes("utama")) utamaCount++;
-      else if (tp.includes("approval")) approvalCount++;
+      if (tp.includes("enhance")) {
+        enhanceCount++;
+        enhanceProjs.push(p);
+      } else if (tp.includes("utama")) {
+        utamaCount++;
+        utamaProjs.push(p);
+      } else if (tp.includes("approval")) {
+        approvalCount++;
+        approvalProjs.push(p);
+      }
     });
 
-    const hasReal = enhanceCount > 0 || utamaCount > 0 || approvalCount > 0;
-    const nEnhance = hasReal ? enhanceCount : typeTab === "semua" ? 60 : 53;
-    const nUtama = hasReal ? utamaCount : typeTab === "semua" ? 62 : 31;
-    const nApproval = hasReal ? approvalCount : typeTab === "semua" ? 134 : 20;
-    const tot = nEnhance + nUtama + nApproval || 1;
+    const tot = enhanceCount + utamaCount + approvalCount || 1;
 
     return [
       {
         name: "Enhance Kecil",
-        n: nEnhance,
+        n: enhanceCount,
         color: "var(--chart-blue-primary)",
-        p: `${Math.round((nEnhance / tot) * 100)}%`,
+        p: `${Math.round((enhanceCount / tot) * 100)}%`,
+        projects: enhanceProjs,
       },
       {
         name: "Project Utama",
-        n: nUtama,
+        n: utamaCount,
         color: "var(--chart-green)",
-        p: `${Math.round((nUtama / tot) * 100)}%`,
+        p: `${Math.round((utamaCount / tot) * 100)}%`,
+        projects: utamaProjs,
       },
       {
         name: "Approval Digital",
-        n: nApproval,
+        n: approvalCount,
         color: "var(--chart-amber)",
-        p: `${Math.round((nApproval / tot) * 100)}%`,
+        p: `${Math.round((approvalCount / tot) * 100)}%`,
+        projects: approvalProjs,
       },
     ];
   }, [typeTab, allProjects, activeProjects]);
@@ -144,86 +169,174 @@ export function TabCategory({
 
   // SVG Donut circumference = 2 * PI * 56 ≈ 351.858
   const C = 351.858;
+  const safeTotal = typeTotal || 1;
   const ring0 = {
     color: typeData[0].color,
-    dash: `${((typeData[0].n / typeTotal) * C).toFixed(2)} ${C}`,
+    dash: `${((typeData[0].n / safeTotal) * C).toFixed(2)} ${C}`,
     off: "0",
   };
   const ring1 = {
     color: typeData[1].color,
-    dash: `${((typeData[1].n / typeTotal) * C).toFixed(2)} ${C}`,
-    off: `-${((typeData[0].n / typeTotal) * C).toFixed(2)}`,
+    dash: `${((typeData[1].n / safeTotal) * C).toFixed(2)} ${C}`,
+    off: `-${((typeData[0].n / safeTotal) * C).toFixed(2)}`,
   };
   const ring2 = {
     color: typeData[2].color,
-    dash: `${((typeData[2].n / typeTotal) * C).toFixed(2)} ${C}`,
-    off: `-${(((typeData[0].n + typeData[1].n) / typeTotal) * C).toFixed(2)}`,
+    dash: `${((typeData[2].n / safeTotal) * C).toFixed(2)} ${C}`,
+    off: `-${(((typeData[0].n + typeData[1].n) / safeTotal) * C).toFixed(2)}`,
   };
 
   // Active by Division
-  const actDivsRaw = [
-    { name: "Operasional Cash Pickup", n: 16 },
-    { name: "Sales & Marketing", n: 16 },
-    { name: "Cabang Jakarta", n: 15 },
-    { name: "Logistik & Armada", n: 15 },
-    { name: "Finance & Accounting", n: 14 },
-    { name: "Legal & Compliance", n: 7 },
-    { name: "Customer Service", n: 7 },
-    { name: "Treasury", n: 6 },
-    { name: "Human Capital", n: 4 },
-    { name: "Risk Management", n: 3 },
-  ];
-  const actMax = 20;
-  const actDivs = actDivsRaw.map((d, i) => ({
-    rank: i + 1,
-    name: d.name,
-    n: d.n,
-    w: `${(d.n / actMax) * 100}%`,
-  }));
+  const actDivs = useMemo(() => {
+    const counts: Record<string, { n: number; projects: SanitizedProject[] }> = {};
+    activeProjects.forEach((p) => {
+      const div = String(p["Owner Div"] || p["Owner Division"] || p["Owner Name"] || "Other").trim();
+      if (div && div !== "-") {
+        if (!counts[div]) counts[div] = { n: 0, projects: [] };
+        counts[div].n += 1;
+        counts[div].projects.push(p);
+      }
+    });
+
+    const sorted = Object.entries(counts).sort((a, b) => b[1].n - a[1].n);
+    const maxN = sorted[0]?.[1].n || 1;
+
+    return sorted.slice(0, 10).map(([name, data], i) => ({
+      rank: i + 1,
+      name,
+      n: data.n,
+      w: `${Math.round((data.n / maxN) * 100)}%`,
+      projects: data.projects,
+    }));
+  }, [activeProjects]);
+
+  const actMaxN = useMemo(() => {
+    const top = actDivs[0]?.n || 20;
+    return Math.max(10, Math.ceil(top / 5) * 5);
+  }, [actDivs]);
 
   // Projects by Division (All Years)
-  const reqDivsRaw = [
-    { name: "Operasional Cash Pickup", n: 45 },
-    { name: "Sales & Marketing", n: 40 },
-    { name: "Finance & Accounting", n: 40 },
-    { name: "Human Capital", n: 32 },
-    { name: "Cabang Jakarta", n: 31 },
-    { name: "Logistik & Armada", n: 31 },
-    { name: "Treasury", n: 24 },
-    { name: "Customer Service", n: 19 },
-    { name: "Legal & Compliance", n: 17 },
-    { name: "Risk Management", n: 10 },
-  ];
-  const reqMax = 45;
-  const divs = reqDivsRaw.map((d, i) => ({
-    rank: i + 1,
-    name: d.name,
-    n: d.n,
-    w: `${(d.n / reqMax) * 100}%`,
-  }));
+  const reqDivs = useMemo(() => {
+    const counts: Record<string, { n: number; projects: SanitizedProject[] }> = {};
+    allProjects.forEach((p) => {
+      const div = String(p["Owner Div"] || p["Owner Division"] || p["Owner Name"] || "Other").trim();
+      if (div && div !== "-") {
+        if (!counts[div]) counts[div] = { n: 0, projects: [] };
+        counts[div].n += 1;
+        counts[div].projects.push(p);
+      }
+    });
 
-  // Division SLA Leaderboard (Matching Prototype & Pict 4)
-  const leaderboard = [
-    { rank: 1, name: "Risk Management", p: 100, ev: 2, na: 0, days: 0 },
-    { rank: 2, name: "Sales & Marketing", p: 90, ev: 20, na: 2, days: 14 },
-    { rank: 3, name: "Cabang Jakarta", p: 88, ev: 16, na: 2, days: 12 },
-    { rank: 4, name: "Customer Service", p: 83, ev: 6, na: 1, days: 2 },
-    { rank: 5, name: "Operasional Cash Pickup", p: 76, ev: 21, na: 5, days: 54 },
-    { rank: 6, name: "Human Capital", p: 75, ev: 16, na: 4, days: 59 },
-    { rank: 7, name: "Finance & Accounting", p: 70, ev: 20, na: 6, days: 95 },
-    { rank: 8, name: "Logistik & Armada", p: 63, ev: 16, na: 6, days: 51 },
-    { rank: 9, name: "Treasury", p: 63, ev: 8, na: 3, days: 32 },
-    { rank: 10, name: "Legal & Compliance", p: 56, ev: 9, na: 4, days: 24 },
-  ].map((b) => ({
-    rank: b.rank,
-    name: b.name,
-    pct: `${b.p}%`,
-    ev: b.ev,
-    na: b.na,
-    color: b.p >= 93 ? "var(--chart-green)" : "var(--chart-red)",
-    ink: b.p >= 93 ? "var(--status-green-fg)" : "var(--status-red-fg)",
-    over: b.days > 0 ? `${b.days} hari` : "—",
-  }));
+    const sorted = Object.entries(counts).sort((a, b) => b[1].n - a[1].n);
+    const maxN = sorted[0]?.[1].n || 1;
+
+    return sorted.slice(0, 10).map(([name, data], i) => ({
+      rank: i + 1,
+      name,
+      n: data.n,
+      w: `${Math.round((data.n / maxN) * 100)}%`,
+      projects: data.projects,
+    }));
+  }, [allProjects]);
+
+  const reqMaxN = useMemo(() => {
+    const top = reqDivs[0]?.n || 45;
+    return Math.max(10, Math.ceil(top / 5) * 5);
+  }, [reqDivs]);
+
+  const divs = reqDivs;
+
+  // Division SLA Leaderboard (Dynamically computed per division)
+  const leaderboard = useMemo(() => {
+    const targetProjects: readonly SanitizedProject[] = slaProjects && slaProjects.length > 0 ? slaProjects : allProjects;
+    const divStats: Record<string, { ev: number; ok: number; na: number; days: number }> = {};
+
+    targetProjects.forEach((p: SanitizedProject) => {
+      const yVal = p["DEV SLA YEAR"];
+      if (String(yVal) !== String(selectedYear)) return;
+      const res = p["DEV SLA"];
+      if (res !== "Achieved" && res !== "Not Achieved") return;
+
+      const div = String(p["Owner Div"] || p["Owner Division"] || p["Owner Name"] || "Other").trim();
+      if (!isStageRealizedInMonths(p, "DEV", selectedYear, monthWindow)) return;
+      if (!divStats[div]) divStats[div] = { ev: 0, ok: 0, na: 0, days: 0 };
+      divStats[div].ev += 1;
+      if (res === "Achieved") divStats[div].ok += 1;
+      if (res === "Not Achieved") {
+        divStats[div].na += 1;
+        const late = Number(p["(Dev) Late Days"]) || 0;
+        if (late > 0) divStats[div].days += late;
+      }
+    });
+
+    const entries = Object.entries(divStats);
+    if (entries.length === 0) return [];
+
+    return entries
+      .map(([name, s]) => {
+        const p = s.ev > 0 ? Math.round((s.ok / s.ev) * 100) : 0;
+        return {
+          name,
+          p,
+          ev: s.ev,
+          na: s.na,
+          days: s.days,
+        };
+      })
+      .sort((a, b) => b.p - a.p || b.ev - a.ev)
+      .slice(0, 10)
+      .map((b, i) => ({
+        rank: i + 1,
+        name: b.name,
+        pct: `${b.p}%`,
+        ev: b.ev,
+        na: b.na,
+        color: b.p >= 93 ? "var(--chart-green)" : "var(--chart-red)",
+        ink: b.p >= 93 ? "var(--status-green-fg)" : "var(--status-red-fg)",
+        over: b.days > 0 ? `${b.days} hari` : "—",
+      }));
+  }, [slaProjects, allProjects, selectedYear, monthWindow]);
+
+  // Overall SLA across all 5 stages for selectedYear
+  const overallSla = useMemo(() => {
+    const targetProjects: readonly SanitizedProject[] = slaProjects && slaProjects.length > 0 ? slaProjects : allProjects;
+    const stages = ["FSD", "DEV", "SIT", "UAT", "LIVE"] as const;
+    let totalData = 0;
+    let totalAchieved = 0;
+    const rows: { name: string; val: string; w: string; color: string }[] = [];
+
+    stages.forEach((st) => {
+      const res = evaluateStageSla(targetProjects, st, slaPeriod);
+      const n = res.contributors;
+      const ok = res.achieved;
+      const pct = res.percentage !== null ? Math.round(res.percentage) : 0;
+      totalData += n;
+      totalAchieved += ok;
+      rows.push({
+        name: `${st === "LIVE" ? "Live" : st} SLA`,
+        val: `${n} data · ${pct}%`,
+        w: `${pct}%`,
+        color: "var(--chart-blue-primary)",
+      });
+    });
+
+    const rate = totalData > 0 ? Math.round((totalAchieved / totalData) * 100) : 0;
+    return { totalData, totalAchieved, rate, rows };
+  }, [slaProjects, allProjects, slaPeriod]);
+
+  // Lowest SLA division
+  const lowestDivisions = useMemo(() => {
+    if (leaderboard.length === 0) return [];
+    return [...leaderboard]
+      .sort((a, b) => {
+        const pA = parseInt(a.pct, 10) || 0;
+        const pB = parseInt(b.pct, 10) || 0;
+        return pA - pB;
+      })
+      .slice(0, 5);
+  }, [leaderboard]);
+
+  const lowestDiv = lowestDivisions[0] || null;
 
   const leftCardRef = React.useRef<HTMLElement | null>(null);
   const [leftCardHeight, setLeftCardHeight] = useState<number | undefined>(undefined);
@@ -244,22 +357,15 @@ export function TabCategory({
 
   const handleTypeClick = (typeName: string, fallbackCount?: number) => {
     const item = typeData.find((t) => t.name === typeName);
-    const count =
-      fallbackCount ??
-      item?.n ??
-      (typeName === "Enhance Kecil"
-        ? (typeTab === "semua" ? 60 : 53)
-        : typeName === "Project Utama"
-        ? (typeTab === "semua" ? 62 : 31)
-        : (typeTab === "semua" ? 134 : 20));
+    const count = fallbackCount ?? item?.n ?? 0;
     setActiveModal({
       type: "group",
       title: typeName,
-      subtitle: `${count} proyek aktif`,
+      subtitle: `${count} proyek ${typeTab === "semua" ? "terdaftar" : "aktif"}`,
       groupName: typeName,
       groupCount: count,
       groupStatus: ["On Progress", "blue"],
-      groupProjects: [],
+      groupProjects: item?.projects || [],
     });
   };
 
@@ -270,7 +376,7 @@ export function TabCategory({
         <div style={{ marginBottom: 10 }}>
           <h1 className="dd-page__title">Category &amp; Division</h1>
           <p className="dd-page__subtitle">
-            {selectedYear === 2026 ? 294 : totalRegistered} proyek terdaftar, semua tahun
+            {totalRegistered} proyek terdaftar · {periodLabel}
           </p>
         </div>
 
@@ -285,21 +391,22 @@ export function TabCategory({
               setActiveModal({
                 type: "kpi",
                 title: "Project types",
-                subtitle: "Semua tahun",
+                subtitle: periodLabel,
                 kpiKey: "ctypes",
                 kpiData: {
-                  num: "166",
-                  of: "/291",
-                  pct: "57%",
+                  num: String(typeData[0]?.n || 0),
+                  of: `/${typeTotal}`,
+                  pct: `${typeTotal > 0 ? Math.round(((typeData[0]?.n || 0) / typeTotal) * 100) : 0}%`,
                   pctCls: "",
                   hasPct: true,
-                  sub: "Enhance Kecil · terbanyak dari 3 jenis",
+                  sub: `${typeData[0]?.name || "-"} · terbanyak dari ${typeData.length} jenis`,
                   note: "Jumlah proyek per kategori.",
-                  rows: [
-                    { name: "Enhance Kecil", val: "166 proyek", w: "100%", color: "var(--chart-blue-primary)" },
-                    { name: "Project Utama", val: "71 proyek", w: "42.8%", color: "var(--chart-blue-primary)" },
-                    { name: "Approval Digital", val: "54 proyek", w: "32.5%", color: "var(--chart-blue-primary)" },
-                  ],
+                  rows: typeData.map((t) => ({
+                    name: t.name,
+                    val: `${t.n} proyek`,
+                    w: `${typeTotal > 0 ? Math.round((t.n / typeTotal) * 100) : 0}%`,
+                    color: t.color,
+                  })),
                 },
               })
             }
@@ -319,8 +426,8 @@ export function TabCategory({
               <span className="dd-kpi__label">Project types</span>
             </div>
             <div className="dd-kpi__row">
-              <span className="dd-kpi__value">3</span>
-              <span className="dd-kpi__sub">Enhance Kecil terbanyak</span>
+              <span className="dd-kpi__value">{typeData.length}</span>
+              <span className="dd-kpi__sub">{typeData[0]?.name || "-"} terbanyak</span>
             </div>
           </button>
 
@@ -336,25 +443,19 @@ export function TabCategory({
                 subtitle: "Semua tahun",
                 kpiKey: "cdivs",
                 kpiData: {
-                  num: "45",
-                  of: "/294",
-                  pct: "15%",
+                  num: String(reqDivs[0]?.n || 0),
+                  of: `/${totalRegistered}`,
+                  pct: `${totalRegistered > 0 ? Math.round(((reqDivs[0]?.n || 0) / totalRegistered) * 100) : 0}%`,
                   pctCls: "",
                   hasPct: true,
-                  sub: "Operasional Cash Pickup · terbanyak dari 11 divisi",
+                  sub: `${reqDivs[0]?.name || "-"} · terbanyak dari ${reqDivs.length} divisi`,
                   note: "Menampilkan 10 divisi peminta terbanyak. Klik divisi untuk melihat proyeknya.",
-                  rows: [
-                    { name: "Operasional Cash Pickup", val: "45 proyek", w: "100%", color: "var(--chart-blue-primary)" },
-                    { name: "Logistik & Armada", val: "38 proyek", w: "84.4%", color: "var(--chart-blue-primary)" },
-                    { name: "Cabang Jakarta", val: "34 proyek", w: "75.6%", color: "var(--chart-blue-primary)" },
-                    { name: "Customer Service", val: "30 proyek", w: "66.7%", color: "var(--chart-blue-primary)" },
-                    { name: "Sales & Marketing", val: "29 proyek", w: "64.4%", color: "var(--chart-blue-primary)" },
-                    { name: "Human Capital", val: "26 proyek", w: "57.8%", color: "var(--chart-blue-primary)" },
-                    { name: "Finance & Accounting", val: "25 proyek", w: "55.6%", color: "var(--chart-blue-primary)" },
-                    { name: "Treasury", val: "22 proyek", w: "48.9%", color: "var(--chart-blue-primary)" },
-                    { name: "Legal & Compliance", val: "19 proyek", w: "42.2%", color: "var(--chart-blue-primary)" },
-                    { name: "Risk Management", val: "6 proyek", w: "13.3%", color: "var(--chart-blue-primary)" },
-                  ],
+                  rows: reqDivs.map((d) => ({
+                    name: d.name,
+                    val: `${d.n} proyek`,
+                    w: d.w,
+                    color: "var(--chart-blue-primary)",
+                  })),
                 },
               })
             }
@@ -375,7 +476,7 @@ export function TabCategory({
               <span className="dd-kpi__label">Requesting divisions</span>
             </div>
             <div className="dd-kpi__row">
-              <span className="dd-kpi__value">11</span>
+              <span className="dd-kpi__value">{reqDivs.length}</span>
               <span className="dd-kpi__sub">divisi</span>
             </div>
           </button>
@@ -388,24 +489,18 @@ export function TabCategory({
             onClick={() =>
               setActiveModal({
                 type: "kpi",
-                title: "Overall SLA 2026",
+                title: `Overall SLA ${selectedYear}`,
                 subtitle: "Ketercapaian per tahap",
                 kpiKey: "csla",
                 kpiData: {
-                  num: "546",
-                  of: "/680",
-                  pct: "80%",
-                  pctCls: "kpct--amber",
+                  num: String(overallSla.totalAchieved),
+                  of: `/${overallSla.totalData}`,
+                  pct: `${overallSla.rate}%`,
+                  pctCls: overallSla.rate >= 93 ? "kpct--green" : "kpct--amber",
                   hasPct: true,
                   sub: "evaluasi tercapai · target 93%",
                   note: "Klik tahap untuk melihat proyek not achieved.",
-                  rows: [
-                    { name: "FSD SLA", val: "157 data · 80%", w: "80%", color: "var(--chart-blue-primary)" },
-                    { name: "DEV SLA", val: "134 data · 75%", w: "75%", color: "var(--chart-blue-primary)" },
-                    { name: "SIT SLA", val: "134 data · 81%", w: "81%", color: "var(--chart-blue-primary)" },
-                    { name: "UAT SLA", val: "133 data · 80%", w: "80%", color: "var(--chart-blue-primary)" },
-                    { name: "Live SLA", val: "122 data · 85%", w: "85%", color: "var(--chart-blue-primary)" },
-                  ],
+                  rows: overallSla.rows,
                   goLabel: "Buka Milestone & SLA",
                   onGo: () => router.push("/dashboard/pic-monitoring/sla"),
                 },
@@ -416,8 +511,8 @@ export function TabCategory({
               <span
                 className="dd-kpi__tile"
                 style={{
-                  background: "var(--status-amber-bg)",
-                  color: "var(--status-amber-fg)",
+                  background: overallSla.rate >= 93 ? "var(--status-green-bg)" : "var(--status-amber-bg)",
+                  color: overallSla.rate >= 93 ? "var(--status-green-fg)" : "var(--status-amber-fg)",
                 }}
               >
                 <svg
@@ -435,8 +530,8 @@ export function TabCategory({
               <span className="dd-kpi__label">Overall SLA {selectedYear}</span>
             </div>
             <div className="dd-kpi__row">
-              <span className="dd-kpi__value">80%</span>
-              <span className="dd-kpi__sub">680 evaluasi</span>
+              <span className="dd-kpi__value">{overallSla.rate}%</span>
+              <span className="dd-kpi__sub">{overallSla.totalData} evaluasi</span>
             </div>
           </button>
 
@@ -449,23 +544,23 @@ export function TabCategory({
               setActiveModal({
                 type: "kpi",
                 title: "Lowest SLA division",
-                subtitle: "DEV SLA 2026 · target 93%",
+                subtitle: `DEV SLA ${selectedYear} · target 93%`,
                 kpiKey: "clow",
                 kpiData: {
-                  num: "5",
-                  of: "/9",
-                  pct: "56%",
+                  num: String(lowestDiv ? lowestDiv.ev - lowestDiv.na : 0),
+                  of: `/${lowestDiv ? lowestDiv.ev : 0}`,
+                  pct: lowestDiv ? lowestDiv.pct : "0%",
                   pctCls: "kpct--red",
                   hasPct: true,
-                  sub: "Legal & Compliance · dievaluasi, tercapai DEV SLA",
+                  sub: `${lowestDiv ? lowestDiv.name : "-"} · dievaluasi, tercapai DEV SLA`,
                   note: "Lima divisi dengan ketercapaian DEV SLA terendah.",
-                  rows: [
-                    { name: "Legal & Compliance", val: "56% · 4 not achieved", w: "56%", color: "var(--chart-red)", ink: "var(--status-red-fg)" },
-                    { name: "Treasury", val: "63% · 3 not achieved", w: "63%", color: "var(--chart-red)", ink: "var(--status-red-fg)" },
-                    { name: "Logistik & Armada", val: "63% · 6 not achieved", w: "63%", color: "var(--chart-red)", ink: "var(--status-red-fg)" },
-                    { name: "Finance & Accounting", val: "70% · 6 not achieved", w: "70%", color: "var(--chart-red)", ink: "var(--status-red-fg)" },
-                    { name: "Human Capital", val: "75% · 4 not achieved", w: "75%", color: "var(--chart-red)", ink: "var(--status-red-fg)" },
-                  ],
+                  rows: lowestDivisions.map((d) => ({
+                    name: d.name,
+                    val: `${d.pct} · ${d.na} not achieved`,
+                    w: d.pct,
+                    color: "var(--chart-red)",
+                    ink: "var(--status-red-fg)",
+                  })),
                 },
               })
             }
@@ -494,9 +589,9 @@ export function TabCategory({
             </div>
             <div className="dd-kpi__row">
               <span className="dd-kpi__value" style={{ color: "var(--status-red-fg)" }}>
-                56%
+                {lowestDiv ? lowestDiv.pct : "—"}
               </span>
-              <span className="dd-kpi__sub">Legal &amp; Compliance</span>
+              <span className="dd-kpi__sub">{lowestDiv ? lowestDiv.name : "Tidak ada data"}</span>
             </div>
           </button>
         </div>
@@ -807,8 +902,8 @@ export function TabCategory({
                 ))}
                 <div className="dd-hbar__xaxis">
                   <span className="dd-hbar__tick dd-hbar__tick--first" style={{ left: 0 }}>0</span>
-                  <span className="dd-hbar__tick" style={{ left: "50%" }}>10</span>
-                  <span className="dd-hbar__tick dd-hbar__tick--last" style={{ left: "100%" }}>20</span>
+                  <span className="dd-hbar__tick" style={{ left: "50%" }}>{Math.round(actMaxN / 2)}</span>
+                  <span className="dd-hbar__tick dd-hbar__tick--last" style={{ left: "100%" }}>{actMaxN}</span>
                 </div>
               </div>
             </div>
@@ -865,8 +960,8 @@ export function TabCategory({
                 ))}
                 <div className="dd-hbar__xaxis">
                   <span className="dd-hbar__tick dd-hbar__tick--first" style={{ left: 0 }}>0</span>
-                  <span className="dd-hbar__tick" style={{ left: "50%" }}>23</span>
-                  <span className="dd-hbar__tick dd-hbar__tick--last" style={{ left: "100%" }}>45</span>
+                  <span className="dd-hbar__tick" style={{ left: "50%" }}>{Math.round(reqMaxN / 2)}</span>
+                  <span className="dd-hbar__tick dd-hbar__tick--last" style={{ left: "100%" }}>{reqMaxN}</span>
                 </div>
               </div>
             </div>
@@ -889,9 +984,9 @@ export function TabCategory({
               <div className="dd-table__titlewrap" style={{ maxWidth: "none" }}>
                 <div className="dd-table__titlerow">
                   <h2 className="dd-table__title">Division SLA leaderboard</h2>
-                  <span className="dd-count">10</span>
+                  <span className="dd-count">{leaderboard.length}</span>
                 </div>
-                <p className="dd-table__hint">DEV SLA 2026 · target 93%</p>
+                <p className="dd-table__hint">DEV SLA {selectedYear} · target 93%</p>
               </div>
             </div>
 
@@ -915,48 +1010,54 @@ export function TabCategory({
                 </div>
               </div>
 
-              {leaderboard.map((b) => (
-                <div
-                  key={b.name}
-                  className="dd-table__row"
-                  style={{
-                    gridTemplateColumns: "52px minmax(0, 1fr) 150px 84px",
-                    minHeight: 50,
-                    paddingRight: 24,
-                  }}
-                >
-                  <div className="dd-table__td">
-                    <span className="dd-rbar__rank">{b.rank}</span>
-                  </div>
-                  <div className="dd-table__td">
-                    <div className="dd-table__primary">{b.name}</div>
-                    <div className="dd-table__secondary">
-                      {b.ev} dievaluasi · {b.na} not achieved
+              {leaderboard.length === 0 ? (
+                <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-secondary)", font: "var(--text-body)" }}>
+                  Tidak ada data evaluasi DEV SLA divisi pada tahun {selectedYear}
+                </div>
+              ) : (
+                leaderboard.map((b) => (
+                  <div
+                    key={b.name}
+                    className="dd-table__row"
+                    style={{
+                      gridTemplateColumns: "52px minmax(0, 1fr) 150px 84px",
+                      minHeight: 50,
+                      paddingRight: 24,
+                    }}
+                  >
+                    <div className="dd-table__td">
+                      <span className="dd-rbar__rank">{b.rank}</span>
                     </div>
-                  </div>
-                  <div className="dd-table__td">
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div className="dd-rbar__track" style={{ flex: 1 }}>
-                        <div
-                          className="dd-rbar__fill"
-                          style={{ width: b.pct, background: b.color }}
-                        />
+                    <div className="dd-table__td">
+                      <div className="dd-table__primary">{b.name}</div>
+                      <div className="dd-table__secondary">
+                        {b.ev} dievaluasi · {b.na} not achieved
                       </div>
-                      <span
-                        className="dd-chart__value"
-                        style={{ width: 36, textAlign: "right", color: b.ink }}
-                      >
-                        {b.pct}
+                    </div>
+                    <div className="dd-table__td">
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div className="dd-rbar__track" style={{ flex: 1 }}>
+                          <div
+                            className="dd-rbar__fill"
+                            style={{ width: b.pct, background: b.color }}
+                          />
+                        </div>
+                        <span
+                          className="dd-chart__value"
+                          style={{ width: 36, textAlign: "right", color: b.ink }}
+                        >
+                          {b.pct}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="dd-table__td" style={{ textAlign: "right" }}>
+                      <span style={{ font: "var(--text-cell-num)", color: "var(--text-secondary)" }}>
+                        {b.over}
                       </span>
                     </div>
                   </div>
-                  <div className="dd-table__td" style={{ textAlign: "right" }}>
-                    <span style={{ font: "var(--text-cell-num)", color: "var(--text-secondary)" }}>
-                      {b.over}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
               <div style={{ height: 20, flex: "none" }} />
             </div>
           </section>

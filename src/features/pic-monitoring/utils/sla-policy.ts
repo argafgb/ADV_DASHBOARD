@@ -128,6 +128,73 @@ export function isMatchingSlaYear(
  * Syarat tambahan filter Bulan: tanggal realisasi tahap jatuh di tahun dan
  * rentang bulan terpilih. Selalu true saat All Months (`months` null).
  */
+export function getStageRealizedDate(
+  project: SlaProject,
+  stage: SlaStage,
+): unknown {
+  const cd = (project as { cleansed_data?: Record<string, unknown> }).cleansed_data;
+  const candidates: Record<SlaStage, string[]> = {
+    FSD: [
+      "(FSD) Realized in Date Diisi saat Approval Digital FSD by Owner selesai",
+      "(FSD) Realized in Date",
+      "(FSD) Realized in date",
+      "(FSD) Realized In Date",
+    ],
+    DEV: [
+      "(Dev) Realized In Date",
+      "(Dev) Realized in Date",
+      "(Dev) Realized in date",
+      "(DEV) Realized In Date",
+      "(DEV) Realized in Date",
+    ],
+    SIT: [
+      "(SIT) Realized in Date",
+      "(SIT) Realized in date",
+      "(SIT) Realized In Date",
+    ],
+    UAT: [
+      "(UAT) Realized In Date",
+      "(UAT) Realized in Date",
+      "(UAT) Realized in date",
+    ],
+    LIVE: [
+      "(Live) Realized in Date",
+      "(Live) Realized in date",
+      "(Live) Realized In Date",
+      "(LIVE) Realized in Date",
+      "(LIVE) Realized in date",
+    ],
+  };
+
+  const keys = candidates[stage] || [];
+  for (const k of keys) {
+    if (project[k] !== undefined && project[k] !== null && project[k] !== "") {
+      return project[k];
+    }
+    if (cd && cd[k] !== undefined && cd[k] !== null && cd[k] !== "") {
+      return cd[k];
+    }
+  }
+
+  const stageLower = stage.toLowerCase();
+  for (const [k, v] of Object.entries(project)) {
+    const kl = k.toLowerCase();
+    if (kl.includes(stageLower) && kl.includes("realiz") && kl.includes("date") && v) {
+      return v;
+    }
+  }
+  if (cd) {
+    for (const [k, v] of Object.entries(cd)) {
+      const kl = k.toLowerCase();
+      if (kl.includes(stageLower) && kl.includes("realiz") && kl.includes("date") && v) {
+        return v;
+      }
+    }
+  }
+
+  return project[SLA_STAGE_REALIZED_DATE_FIELDS[stage]];
+}
+
 export function isStageRealizedInMonths(
   project: SlaProject,
   stage: SlaStage,
@@ -136,12 +203,13 @@ export function isStageRealizedInMonths(
 ): boolean {
   if (months === null) return true;
 
-  const realized = parseProjectDateYearMonth(
-    project[SLA_STAGE_REALIZED_DATE_FIELDS[stage]],
-  );
+  const rawDate = getStageRealizedDate(project, stage);
+  const realized = parseProjectDateYearMonth(rawDate);
+  const targetYear = parseSlaYear(selectedYear);
+
   return (
     realized !== null &&
-    realized.year === parseSlaYear(selectedYear) &&
+    realized.year === targetYear &&
     realized.month >= months.startMonth &&
     realized.month <= months.endMonth
   );

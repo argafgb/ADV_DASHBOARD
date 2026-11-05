@@ -317,10 +317,26 @@ export function computeDashboardMetrics(
     String(comparisonSelectedYear),
   ];
 
-  // User Feedback Summary
+  // User Feedback Summary filtered by comparisonSelectedYear
   const fbVals = data
-    .map((p) => p._feedback)
-    .filter((f): f is number => f !== null);
+    .filter((p) => {
+      if (p._feedback === null) return false;
+      const cd = (p as unknown as { cleansed_data?: Record<string, unknown> }).cleansed_data ?? p;
+      const ly = String(cd["LIVE SLA YEAR"] ?? (p as Record<string, unknown>)["LIVE SLA YEAR"] ?? "").trim();
+      if (/^\d{4}$/.test(ly)) return ly === String(comparisonSelectedYear);
+      const ld = String(cd["(Live) Realized in Date"] ?? (p as Record<string, unknown>)["(Live) Realized in Date"] ?? "").trim();
+      const ldm = /^(\d{4})/.exec(ld);
+      if (ldm) return ldm[1] === String(comparisonSelectedYear);
+      const dy = String(cd["DEV SLA YEAR"] ?? (p as Record<string, unknown>)["DEV SLA YEAR"] ?? "").trim();
+      if (/^\d{4}$/.test(dy)) return dy === String(comparisonSelectedYear);
+      const tm = /^(\d{2})/.exec(String(p.Ticket || "").trim());
+      if (tm) return String(2000 + Number(tm[1])) === String(comparisonSelectedYear);
+      const dm = /(?:19|20)\d{2}/.exec(String(cd["Project diajukan"] ?? p._year ?? ""));
+      if (dm) return dm[0] === String(comparisonSelectedYear);
+      if (p.Year) return String(p.Year) === String(comparisonSelectedYear);
+      return false;
+    })
+    .map((p) => p._feedback as number);
   const fbAvg =
     fbVals.length > 0
       ? fbVals.reduce((a, b) => a + b, 0) / fbVals.length
