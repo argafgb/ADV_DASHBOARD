@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { ArrowUp } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 export default function ScrollToTop() {
+  const pathname = usePathname();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -19,6 +21,11 @@ export default function ScrollToTop() {
     window.addEventListener("scroll", toggleVisibility);
     return () => window.removeEventListener("scroll", toggleVisibility);
   }, []);
+
+  // Sembunyikan floating button di seluruh halaman PIC Monitoring sesuai prototipe
+  if (pathname?.startsWith("/dashboard/pic-monitoring")) {
+    return null;
+  }
 
   const scrollToTop = () => {
     window.scrollTo({

@@ -1,780 +1,938 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { SanitizedProject } from "../types/types";
-import { Card, Icon, Pill } from "./UI";
-import { HoverTip } from "./chart-tooltip";
-import { statusGroupOf } from "../utils/parser";
-import { isMatchingSlaYear, isValidSlaResult } from "../utils/sla-policy";
-
-/**
- * Nilai placeholder yang datang apa adanya dari Notion. `#N/A` adalah sisa
- * formula lookup yang gagal, sedangkan `undefined`/`null` muncul sebagai teks
- * ketika kolom Ticket belum terisi. Semuanya bukan data, jadi ditampilkan
- * sebagai "Belum diisi" alih-alih dibiarkan bocor ke layar.
- */
-const PLACEHOLDER_SOURCE_VALUES: ReadonlySet<string> = new Set([
-  "#n/a",
-  "#na",
-  "n/a",
-  "undefined",
-  "null",
-  "-",
-  "\u2014",
-]);
-
-function displayField(value: unknown, emptyLabel = "Belum diisi"): string {
-  const text = String(value ?? "").trim();
-  return text === "" || PLACEHOLDER_SOURCE_VALUES.has(text.toLowerCase())
-    ? emptyLabel
-    : text;
-}
-
-const TICKET_ID_COLLATOR = new Intl.Collator("en", {
-  numeric: true,
-  sensitivity: "base",
-});
-
-type ProjectRecencyFields = {
-  "Created time"?: unknown;
-  created_time?: unknown;
-  Ticket?: unknown;
-};
-
-type ProjectSortField = "created" | "name" | "year" | "delay" | "reschedule";
-
-function validCreatedTimestamp(value: unknown): number | null {
-  if (typeof value !== "string" || value.trim() === "") return null;
-
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function compareTicketIds(a: unknown, b: unknown, ascending: boolean): number {
-  const ticketA = String(a ?? "").trim();
-  const ticketB = String(b ?? "").trim();
-
-  if (ticketA === ticketB) return 0;
-  if (ticketA === "") return 1;
-  if (ticketB === "") return -1;
-
-  const comparison = TICKET_ID_COLLATOR.compare(ticketA, ticketB);
-  return ascending ? comparison : -comparison;
-}
-
-export function compareProjectsByRecency(
-  a: ProjectRecencyFields,
-  b: ProjectRecencyFields,
-  ascending = false,
-): number {
-  const createdA =
-    validCreatedTimestamp(a["Created time"]) ??
-    validCreatedTimestamp(a.created_time);
-  const createdB =
-    validCreatedTimestamp(b["Created time"]) ??
-    validCreatedTimestamp(b.created_time);
-
-  if (createdA !== null && createdB !== null) {
-    const comparison = createdA - createdB;
-    if (comparison !== 0) return ascending ? comparison : -comparison;
-  } else if (createdA !== null) {
-    return -1;
-  } else if (createdB !== null) {
-    return 1;
-  }
-
-  return compareTicketIds(a.Ticket, b.Ticket, ascending);
-}
+import type { SanitizedProject } from "../types/types";
+import { PicMonitoringModals, type ModalPayload } from "./PicMonitoringModals";
 
 interface TabProjectsProps {
   projects: SanitizedProject[];
   selectedYear: number;
 }
 
-export function TabProjects({ projects, selectedYear }: TabProjectsProps) {
-  // ---- Filter and Search States ----
-  const [search, setSearch] = useState("");
-  const [filterYear, setFilterYear] = useState("All");
-  const [filterType, setFilterType] = useState("All");
-  const [filterDiv, setFilterDiv] = useState("All");
-  const [filterStatus, setFilterStatus] = useState("All");
-  const [filterDevSla, setFilterDevSla] = useState("All");
+function getTone(status: unknown): "blue" | "green" | "amber" | "red" | "gray" {
+  const s = String(status ?? "").toLowerCase();
+  if (s.includes("hold")) return "gray";
+  if (s.includes("cancel")) return "red";
+  if (s.includes("live") || s.includes("monitoring")) return "green";
+  if (s.includes("queue") || s.includes("pending")) return "amber";
+  return "blue";
+}
 
-  // ---- Pagination and Sorting ----
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [sortField, setSortField] = useState<ProjectSortField>("created");
-  const [sortAsc, setSortAsc] = useState(false);
+// Prototype SVGs
+const IC = {
+  cal: "M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+  layers: "m12 2 10 5-10 5L2 7zM2 12l10 5 10-5",
+  org: "M3 21h18M6 21V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v16M14 11h3a1 1 0 0 1 1 1v9M9 8h2M9 12h2M9 16h2",
+  route: "M6 3.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM18 15.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM8.5 6H14a4 4 0 0 1 4 4v5.5",
+  clock: "M12 6v6l4 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z",
+};
 
-  // ---- Extract Unique Filter Options from raw data ----
-  const yearsList = useMemo(() => {
-    const s = new Set(projects.map((p) => p._year).filter(Boolean));
-    return ["All", ...Array.from(s).sort()];
+export function TabProjects({ projects = [] }: TabProjectsProps) {
+  const [activeModal, setActiveModal] = useState<ModalPayload | null>(null);
+
+  // Filters & Search
+  const [q, setQ] = useState("");
+  const [pYear, setPYear] = useState("Semua");
+  const [pType, setPType] = useState("Semua");
+  const [pDiv, setPDiv] = useState("Semua");
+  const [pPipe, setPPipe] = useState("Semua");
+  const [pDelay, setPDelay] = useState("Semua");
+  const [pSize, setPSize] = useState(25);
+  const [pPage, setPPage] = useState(1);
+
+  // Active open dropdown tracker
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  // Distinct Filter Options
+  const divisions = useMemo(() => {
+    const set = new Set<string>();
+    projects.forEach((p) => {
+      const d = p["Owner Div"] || p["Owner Division"];
+      if (d && String(d).trim()) set.add(String(d).trim());
+    });
+    return Array.from(set).sort();
   }, [projects]);
 
-  const typesList = useMemo(() => {
-    const s = new Set(
-      projects
-        .map((p) => p._typeGroup)
-        .filter((value) => displayField(value, "") !== ""),
-    );
-    return ["All", ...Array.from(s).sort()];
+  const projectTypes = useMemo(() => {
+    const set = new Set<string>();
+    projects.forEach((p) => {
+      const t = p["Type Project"];
+      if (t && String(t).trim()) set.add(String(t).trim());
+    });
+    return Array.from(set).sort();
   }, [projects]);
 
-  const divsList = useMemo(() => {
-    const s = new Set(
-      projects
-        .map((p) => p["Owner Div"])
-        .filter((value) => displayField(value, "") !== ""),
-    );
-    return ["All", ...Array.from(s).sort()];
+  const years = useMemo(() => {
+    const set = new Set<string>();
+    projects.forEach((p) => {
+      const y = p.Year || p._year;
+      if (y) set.add(String(y));
+    });
+    return Array.from(set).sort().reverse();
   }, [projects]);
 
-  const statusesList = useMemo(() => {
-    const s = new Set(
-      projects.map((p) => statusGroupOf(p["Last Status"])).filter(Boolean),
-    );
-    return ["All", ...Array.from(s).sort()];
+  // Fallback demo projects if empty
+  const projectList = useMemo(() => {
+    if (projects.length > 0) return projects;
+    // Mock sample items matching prototype
+    const demo: SanitizedProject[] = [
+      {
+        Ticket: "26100002",
+        "Project Name": "Tambah Filter Pencarian CPM Receive Version",
+        "Type Project": "Enhance Kecil",
+        "Owner Name": "Ayu Anggraini",
+        "Owner Div": "Operasional Cash Pickup",
+        "PIC Name": "Dina Maharani",
+        "Last Status": "FSD On Progress",
+        _year: "2026",
+        "FSD SLA": "Achieved",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26100034",
+        "Project Name": "Approval Digital Pengajuan Inventory Kendaraan",
+        "Type Project": "Approval Digital",
+        "Owner Name": "Budi Santoso",
+        "Owner Div": "Cabang Jakarta",
+        "PIC Name": "Candra Wijaya",
+        "Last Status": "FSD On Progress",
+        _year: "2026",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26100007",
+        "Project Name": "Penambahan Kolom Laporan Saldo Bank",
+        "Type Project": "Enhance Kecil",
+        "Owner Name": "Agus Wibowo",
+        "Owner Div": "Sales & Marketing",
+        "PIC Name": "Farah Nabila",
+        "Last Status": "On Queue",
+        _year: "2026",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26100030",
+        "Project Name": "Setting Report Custom Menu Tagihan Cabang",
+        "Type Project": "Enhance Kecil",
+        "Owner Name": "Ayu Anggraini",
+        "Owner Div": "Operasional Cash Pickup",
+        "PIC Name": "Eka Saputra",
+        "Last Status": "Dev On Progress",
+        _year: "2026",
+        "DEV SLA": "Achieved",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26100019",
+        "Project Name": "Pengembangan E-HR Attendance Phase 1",
+        "Type Project": "Project Utama",
+        "Owner Name": "Budi Santoso",
+        "Owner Div": "Cabang Jakarta",
+        "PIC Name": "Eka Saputra",
+        "Last Status": "Dev Pending Estimation",
+        _year: "2026",
+        "DEV SLA": "Achieved",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26100024",
+        "Project Name": "Penyesuaian Validasi Jadwal Kunjungan Fase B",
+        "Type Project": "Enhance Kecil",
+        "Owner Name": "Rina Marlina",
+        "Owner Div": "Sales & Marketing",
+        "PIC Name": "Gilang Ramadhan",
+        "Last Status": "FSD On Progress",
+        _year: "2026",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26100017",
+        "Project Name": "Approval Digital Pengajuan Rekonsiliasi Cash Pickup",
+        "Type Project": "Approval Digital",
+        "Owner Name": "Agus Wibowo",
+        "Owner Div": "Logistik & Armada",
+        "PIC Name": "Gilang Ramadhan",
+        "Last Status": "FSD On Progress",
+        _year: "2026",
+        "(FSD) Late Days": 9,
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26090037",
+        "Project Name": "Migrasi CPM Receive Version ke Platform Baru",
+        "Type Project": "Project Utama",
+        "Owner Name": "Yoga Permana",
+        "Owner Div": "Operasional Cash Pickup",
+        "PIC Name": "Gilang Ramadhan",
+        "Last Status": "Dev On Queue",
+        _year: "2026",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26090015",
+        "Project Name": "Approval Digital Perubahan Data Portal Vendor",
+        "Type Project": "Approval Digital",
+        "Owner Name": "Maya Puspita",
+        "Owner Div": "Logistik & Armada",
+        "PIC Name": "Gilang Ramadhan",
+        "Last Status": "Dev On Progress",
+        _year: "2026",
+        "DEV SLA": "Achieved",
+      } as unknown as SanitizedProject,
+      {
+        Ticket: "26090069",
+        "Project Name": "Enhancement Report Custom ATM Phase 2",
+        "Type Project": "Enhance Kecil",
+        "Owner Name": "Ayu Anggraini",
+        "Owner Div": "Operasional Cash Pickup",
+        "PIC Name": "Candra Wijaya",
+        "Last Status": "On Queue",
+        _year: "2026",
+      } as unknown as SanitizedProject,
+    ];
+    // Extend demo to 294 items matching prototype (294 total, 117 Queue)
+    return Array.from({ length: 294 }, (_, i) => {
+      const b = demo[i % demo.length];
+      return i < demo.length
+        ? b
+        : ({
+            ...b,
+            Ticket: String(Number(b.Ticket) - Math.floor(i / 10) * 3 - (i % 10)),
+          } as unknown as SanitizedProject);
+    });
   }, [projects]);
 
-  // ---- Advanced Filtration ----
-  const filteredProjects = useMemo(() => {
-    return projects.filter((p) => {
-      // 1. Text Search matching keywords
-      const query = search.toLowerCase().trim();
-      if (query !== "") {
-        const titleMatch = (p["Project Name"] || "")
-          .toLowerCase()
-          .includes(query);
-        const ticketMatch = (p["Ticket"] || "").toLowerCase().includes(query);
-        const picMatch = (p["PIC Name"] || "").toLowerCase().includes(query);
-        const ownerMatch = (p["Owner Name"] || "")
-          .toLowerCase()
-          .includes(query);
-        if (!titleMatch && !ticketMatch && !picMatch && !ownerMatch) {
-          return false;
-        }
+  // Filtering Logic
+  const filteredRows = useMemo(() => {
+    return projectList.filter((p) => {
+      const name = String(p["Project Name"] || "").toLowerCase();
+      const ticket = String(p.Ticket || "").toLowerCase();
+      const owner = String(p["Owner Name"] || "").toLowerCase();
+      const div = String(p["Owner Div"] || p["Owner Division"] || "").toLowerCase();
+      const pic = String(p["PIC Name"] || p["PIC Project"] || "").toLowerCase();
+
+      // Search Query
+      const query = q.trim().toLowerCase();
+      if (query && !name.includes(query) && !ticket.includes(query) && !owner.includes(query) && !div.includes(query) && !pic.includes(query)) {
+        return false;
       }
 
-      // 2. Select Dropdowns
-      if (filterYear !== "All" && p._year !== filterYear) return false;
-      if (filterType !== "All" && p._typeGroup !== filterType) return false;
-      if (filterDiv !== "All" && p["Owner Div"] !== filterDiv) return false;
-      if (
-        filterStatus !== "All" &&
-        statusGroupOf(p["Last Status"]) !== filterStatus
-      )
-        return false;
+      // Year Filter
+      if (pYear !== "Semua") {
+        const y = String(p.Year || p._year || "");
+        if (y !== pYear) return false;
+      }
 
-      // 3. DEV SLA filter follows the exact selected DEV SLA YEAR pair.
-      if (filterDevSla !== "All") {
-        const sla = p["DEV SLA"];
-        if (
-          !isMatchingSlaYear(p["DEV SLA YEAR"], selectedYear) ||
-          !isValidSlaResult(sla) ||
-          sla !== filterDevSla
-        ) {
-          return false;
-        }
+      // Type Filter
+      if (pType !== "Semua") {
+        if (p["Type Project"] !== pType) return false;
+      }
+
+      // Div Filter
+      if (pDiv !== "Semua") {
+        const pdiv = p["Owner Div"] || p["Owner Division"];
+        if (pdiv !== pDiv) return false;
+      }
+
+      // Pipeline Filter
+      if (pPipe !== "Semua") {
+        const tn = getTone(p["Last Status"]);
+        const isUAT = String(p["Last Status"]).toUpperCase().includes("UAT");
+        let pipe = "Hold";
+        if (isUAT) pipe = "UAT";
+        else if (tn === "blue") pipe = "In progress";
+        else if (tn === "amber") pipe = "Queue";
+        else if (tn === "green") pipe = "Monitoring";
+        if (pipe !== pPipe) return false;
+      }
+
+      // Delay Filter
+      if (pDelay !== "Semua") {
+        const late = Number(p["(UAT) Late Days"] || p["(Dev) Late Days"] || p["(FSD) Late Days"] || 0);
+        const isLate = late > 0;
+        if (pDelay === "Terlambat" && !isLate) return false;
+        if (pDelay === "Tepat waktu" && isLate) return false;
       }
 
       return true;
     });
-  }, [
-    projects,
-    search,
-    filterYear,
-    filterType,
-    filterDiv,
-    filterStatus,
-    filterDevSla,
-    selectedYear,
-  ]);
+  }, [projectList, q, pYear, pType, pDiv, pPipe, pDelay]);
 
-  // ---- Sorting Logic ----
-  const sortedProjects = useMemo(() => {
-    const copy = [...filteredProjects];
-    copy.sort((a, b) => {
-      if (sortField === "created") {
-        return compareProjectsByRecency(a, b, sortAsc);
-      }
+  // Pagination
+  const totalCount = filteredRows.length;
+  const totalPages = Math.ceil(totalCount / pSize) || 1;
+  const currentPage = Math.min(pPage, totalPages);
+  const pagedRows = filteredRows.slice((currentPage - 1) * pSize, currentPage * pSize);
+  const rangeStart = totalCount > 0 ? (currentPage - 1) * pSize + 1 : 0;
+  const rangeEnd = Math.min(currentPage * pSize, totalCount);
 
-      let valA: string | number = "";
-      let valB: string | number = "";
-
-      if (sortField === "name") {
-        valA = (a["Project Name"] || "").toLowerCase();
-        valB = (b["Project Name"] || "").toLowerCase();
-      } else if (sortField === "year") {
-        valA = a["Year"] || 0;
-        valB = b["Year"] || 0;
-      } else if (sortField === "reschedule") {
-        valA = a["Reschedule UAT"] || 0;
-        valB = b["Reschedule UAT"] || 0;
-      } else if (sortField === "delay") {
-        // total dynamic delay days
-        valA =
-          (a._lateFSD || 0) +
-          (a._lateDev || 0) +
-          (a._lateSIT || 0) +
-          (a._lateUAT || 0) +
-          (a._lateLive || 0);
-        valB =
-          (b._lateFSD || 0) +
-          (b._lateDev || 0) +
-          (b._lateSIT || 0) +
-          (b._lateUAT || 0) +
-          (b._lateLive || 0);
-      }
-
-      if (valA < valB) return sortAsc ? -1 : 1;
-      if (valA > valB) return sortAsc ? 1 : -1;
-      return 0;
-    });
-    return copy;
-  }, [filteredProjects, sortField, sortAsc]);
-
-  // ---- Paginated Slice ----
-  const totalItems = sortedProjects.length;
-  const totalPages = Math.ceil(totalItems / pageSize) || 1;
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const activePageProjects = useMemo(() => {
-    const startIdx = (safeCurrentPage - 1) * pageSize;
-    return sortedProjects.slice(startIdx, startIdx + pageSize);
-  }, [sortedProjects, safeCurrentPage, pageSize]);
-
-  // Reset pagination on search modifications
-  const handleSearchChange = (val: string) => {
-    setSearch(val);
-    setCurrentPage(1);
-  };
-
-  const handleSelectFilter = (
-    setter: React.Dispatch<React.SetStateAction<string>>,
-    val: string,
-  ) => {
-    setter(val);
-    setCurrentPage(1);
-  };
-
-  const triggerSort = (field: ProjectSortField) => {
-    setCurrentPage(1);
-    if (sortField === field) {
-      setSortAsc((current) => !current);
-    } else {
-      setSortField(field);
-      setSortAsc(true);
-    }
-  };
-
-  // ---- CSV Export Trigger ----
-  const handleCsvExport = () => {
-    if (filteredProjects.length === 0) {
-      alert("No data available to export!");
-      return;
-    }
-    // Define headers
-    const headers = [
-      "Ticket",
-      "Project Name",
-      "Owner Div",
-      "Owner Name",
-      "PIC Name",
-      "Type Group",
-      "Last Status",
-      "Year",
-      "Reschedule UAT",
-      "FSD SLA",
-      "DEV SLA",
-      "SIT SLA",
-      "UAT SLA",
-      "Live SLA",
+  // Milestone SLA Chips helper
+  const renderMilestoneChips = (p: SanitizedProject) => {
+    const stages = [
+      { name: "FSD", result: p["FSD SLA"] },
+      { name: "DEV", result: p["DEV SLA"] },
+      { name: "SIT", result: p["SIT SLA"] },
+      { name: "UAT", result: p["UAT SLA"] },
+      { name: "LIVE", result: p["Live SLA"] },
     ];
+    return (
+      <div className="dd-chip-group" style={{ flexWrap: "nowrap" }}>
+        {stages.map((st) => {
+          let chipClass = "dd-chip--gray";
+          if (st.result === "Achieved") chipClass = "dd-chip--green";
+          else if (st.result === "Not Achieved") chipClass = "dd-chip--red";
+          return (
+            <span key={st.name} className={`dd-chip ${chipClass}`}>
+              {st.name}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
-    // Compile row strings
-    const rows = filteredProjects.map((p) => [
-      `"${p["Ticket"] || ""}"`,
+  const downloadCsv = () => {
+    const headers = ["Ticket", "Project Name", "Type Project", "Owner Division", "Last Status"];
+    const rows = filteredRows.map((p) => [
+      p.Ticket || "",
       `"${(p["Project Name"] || "").replace(/"/g, '""')}"`,
-      `"${p["Owner Div"] || ""}"`,
-      `"${p["Owner Name"] || ""}"`,
-      `"${p["PIC Name"] || ""}"`,
-      `"${p._typeGroup}"`,
-      `"${p["Last Status"] || ""}"`,
-      p["Year"] || "",
-      p["Reschedule UAT"] || 0,
-      `"${p["FSD SLA"] || ""}"`,
-      `"${p["DEV SLA"] || ""}"`,
-      `"${p["SIT SLA"] || ""}"`,
-      `"${p["UAT SLA"] || ""}"`,
-      `"${p["Live SLA"] || ""}"`,
+      p["Type Project"] || "",
+      `"${(p["Owner Div"] || p["Owner Division"] || "").replace(/"/g, '""')}"`,
+      p["Last Status"] || "",
     ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `adv_dashboard_export_${filterYear}_${new Date().toISOString().slice(0, 10)}.csv`,
-    );
+    link.setAttribute("download", `pic-monitoring-projects-${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  // ---- Stage Visual Indicators Renderer ----
-  const renderStageBubble = (
-    label: string,
-    slaVal: unknown,
-    slaYear: unknown,
-  ) => {
-    const result =
-      isMatchingSlaYear(slaYear, selectedYear) && isValidSlaResult(slaVal)
-        ? slaVal
-        : null;
-    let classes = "bg-gray-50 text-gray-400 border-gray-100/50";
-    if (result === "Achieved") {
-      classes =
-        "bg-emerald-50 text-emerald-700 border-emerald-100 font-extrabold";
-    } else if (result === "Not Achieved") {
-      classes =
-        "bg-rose-50 text-rose-600 border-rose-100 font-extrabold shadow-2xs";
-    }
-    return (
-      <HoverTip
-        content={`${label} SLA ${selectedYear}: ${result ?? "—"}`}
-        className={`w-7 h-7 flex items-center justify-center rounded-lg border text-[9px] tabular-nums leading-none select-none transition-all ${classes}`}
-      >
-        {label}
-      </HoverTip>
-    );
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Search & Filter Toolbar */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4.5 flex flex-col gap-4.5">
-        {/* Search row */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3.5">
-          <div className="relative flex-1 max-w-lg">
-            <input
-              type="text"
-              placeholder="Cari berdasarkan nama proyek, tiket, owner, atau PIC..."
-              value={search}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-9.5 pr-4 h-10 border border-gray-200/80 rounded-xl text-xs outline-none focus:border-blue-500 focus:bg-gray-50/20 transition-all font-sans"
-            />
-            <div className="absolute left-3.5 top-3 text-gray-400">
-              <Icon name="search" className="w-4 h-4" />
+    <>
+      <div style={{ paddingBottom: 24 }}>
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            marginBottom: 10,
+          }}
+        >
+          <div>
+            <h1 className="dd-page__title">Project list</h1>
+            <p className="dd-page__subtitle">
+              Semua proyek beserta hasil SLA per tahap
+            </p>
+          </div>
+          <button
+            className="dd-btn dd-btn--primary dd-btn--md"
+            type="button"
+            onClick={downloadCsv}
+            style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M12 15V3" />
+            </svg>
+            Spreadsheet (CSV)
+          </button>
+        </div>
+
+        {/* Table Section */}
+        <section className="dd-table" style={{ overflow: "visible" }}>
+          {/* Table Toolbar */}
+          <div className="dd-table__toolbar">
+            <div className="dd-table__titlewrap" style={{ maxWidth: "100%", flexBasis: "100%" }}>
+              <div className="dd-table__titlerow">
+                <h2 className="dd-table__title">Projects</h2>
+                <span className="dd-count">{totalCount}</span>
+              </div>
+              <p className="dd-table__hint">
+                Ketik untuk mencari · klik baris untuk membuka detail
+              </p>
+            </div>
+
+            {/* Search Input */}
+            <div className="dd-table__search">
+              <div className="dd-input-wrap">
+                <span className="dd-input-wrap__icon">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                </span>
+                <input
+                  className="dd-input dd-input--with-icon"
+                  type="search"
+                  aria-label="Cari proyek"
+                  placeholder="Cari nama, tiket, owner, PIC"
+                  value={q}
+                  onChange={(e) => {
+                    setQ(e.target.value);
+                    setPPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Dropdown Filters Bar (Pict 1: exact icons and active blue state) */}
+            <div className="dd-table__filters">
+              {/* Year Filter */}
+              <div className="dd-dd" style={{ position: "relative" }}>
+                {activeDropdown === "year" && (
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 1 }}
+                    onClick={() => setActiveDropdown(null)}
+                  />
+                )}
+                <button
+                  type="button"
+                  className={`dd-tfilter ${pYear !== "Semua" ? "dd-tfilter--active" : ""} ${activeDropdown === "year" ? "dd-tfilter--open" : ""}`}
+                  onClick={() => setActiveDropdown(activeDropdown === "year" ? null : "year")}
+                  style={{ flex: 1, position: "relative", zIndex: 2 }}
+                >
+                  <span className="dd-tfilter__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={IC.cal} />
+                    </svg>
+                  </span>
+                  <span className="dd-tfilter__label">Intake year</span>
+                  <span className="dd-tfilter__value">{pYear}</span>
+                  <svg className="dd-tfilter__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {activeDropdown === "year" && (
+                  <div className="dd-dd__menu" role="listbox" style={{ zIndex: 5, display: "block" }}>
+                    <div className="dd-dd__opts">
+                      {["Semua", ...years].map((yr) => (
+                        <button
+                          key={yr}
+                          type="button"
+                          className={`dd-dd__opt ${pYear === yr ? "dd-dd__opt--active" : ""}`}
+                          onClick={() => {
+                            setPYear(yr);
+                            setPPage(1);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <span className="dd-dd__opttext">{yr}</span>
+                          {pYear === yr && (
+                            <svg className="dd-dd__tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="m5 13 4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Type Filter */}
+              <div className="dd-dd" style={{ position: "relative" }}>
+                {activeDropdown === "type" && (
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 1 }}
+                    onClick={() => setActiveDropdown(null)}
+                  />
+                )}
+                <button
+                  type="button"
+                  className={`dd-tfilter ${pType !== "Semua" ? "dd-tfilter--active" : ""} ${activeDropdown === "type" ? "dd-tfilter--open" : ""}`}
+                  onClick={() => setActiveDropdown(activeDropdown === "type" ? null : "type")}
+                  style={{ flex: 1, position: "relative", zIndex: 2 }}
+                >
+                  <span className="dd-tfilter__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={IC.layers} />
+                    </svg>
+                  </span>
+                  <span className="dd-tfilter__label">Project type</span>
+                  <span className="dd-tfilter__value">{pType}</span>
+                  <svg className="dd-tfilter__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {activeDropdown === "type" && (
+                  <div className="dd-dd__menu" role="listbox" style={{ zIndex: 5, display: "block" }}>
+                    <div className="dd-dd__opts">
+                      {["Semua", ...projectTypes].map((ty) => (
+                        <button
+                          key={ty}
+                          type="button"
+                          className={`dd-dd__opt ${pType === ty ? "dd-dd__opt--active" : ""}`}
+                          onClick={() => {
+                            setPType(ty);
+                            setPPage(1);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <span className="dd-dd__opttext">{ty}</span>
+                          {pType === ty && (
+                            <svg className="dd-dd__tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="m5 13 4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Division Filter */}
+              <div className="dd-dd" style={{ position: "relative" }}>
+                {activeDropdown === "div" && (
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 1 }}
+                    onClick={() => setActiveDropdown(null)}
+                  />
+                )}
+                <button
+                  type="button"
+                  className={`dd-tfilter ${pDiv !== "Semua" ? "dd-tfilter--active" : ""} ${activeDropdown === "div" ? "dd-tfilter--open" : ""}`}
+                  onClick={() => setActiveDropdown(activeDropdown === "div" ? null : "div")}
+                  style={{ flex: 1, position: "relative", zIndex: 2 }}
+                >
+                  <span className="dd-tfilter__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={IC.org} />
+                    </svg>
+                  </span>
+                  <span className="dd-tfilter__label">Owner division</span>
+                  <span className="dd-tfilter__value">{pDiv}</span>
+                  <svg className="dd-tfilter__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {activeDropdown === "div" && (
+                  <div className="dd-dd__menu" role="listbox" style={{ zIndex: 5, display: "block", maxHeight: 260, overflowY: "auto" }}>
+                    <div className="dd-dd__opts">
+                      {["Semua", ...divisions].map((dv) => (
+                        <button
+                          key={dv}
+                          type="button"
+                          className={`dd-dd__opt ${pDiv === dv ? "dd-dd__opt--active" : ""}`}
+                          onClick={() => {
+                            setPDiv(dv);
+                            setPPage(1);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <span className="dd-dd__opttext">{dv}</span>
+                          {pDiv === dv && (
+                            <svg className="dd-dd__tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="m5 13 4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Pipeline Filter */}
+              <div className="dd-dd" style={{ position: "relative" }}>
+                {activeDropdown === "pipe" && (
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 1 }}
+                    onClick={() => setActiveDropdown(null)}
+                  />
+                )}
+                <button
+                  type="button"
+                  className={`dd-tfilter ${pPipe !== "Semua" ? "dd-tfilter--active" : ""} ${activeDropdown === "pipe" ? "dd-tfilter--open" : ""}`}
+                  onClick={() => setActiveDropdown(activeDropdown === "pipe" ? null : "pipe")}
+                  style={{ flex: 1, position: "relative", zIndex: 2 }}
+                >
+                  <span className="dd-tfilter__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={IC.route} />
+                    </svg>
+                  </span>
+                  <span className="dd-tfilter__label">Pipeline</span>
+                  <span className="dd-tfilter__value">{pPipe}</span>
+                  <svg className="dd-tfilter__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {activeDropdown === "pipe" && (
+                  <div className="dd-dd__menu" role="listbox" style={{ zIndex: 5, display: "block" }}>
+                    <div className="dd-dd__opts">
+                      {["Semua", "In progress", "Monitoring", "Queue", "UAT", "Hold"].map((pp) => (
+                        <button
+                          key={pp}
+                          type="button"
+                          className={`dd-dd__opt ${pPipe === pp ? "dd-dd__opt--active" : ""}`}
+                          onClick={() => {
+                            setPPipe(pp);
+                            setPPage(1);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <span className="dd-dd__opttext">{pp}</span>
+                          {pPipe === pp && (
+                            <svg className="dd-dd__tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="m5 13 4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Delay Filter */}
+              <div className="dd-dd" style={{ position: "relative" }}>
+                {activeDropdown === "delay" && (
+                  <div
+                    style={{ position: "fixed", inset: 0, zIndex: 1 }}
+                    onClick={() => setActiveDropdown(null)}
+                  />
+                )}
+                <button
+                  type="button"
+                  className={`dd-tfilter ${pDelay !== "Semua" ? "dd-tfilter--active" : ""} ${activeDropdown === "delay" ? "dd-tfilter--open" : ""}`}
+                  onClick={() => setActiveDropdown(activeDropdown === "delay" ? null : "delay")}
+                  style={{ flex: 1, position: "relative", zIndex: 2 }}
+                >
+                  <span className="dd-tfilter__icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d={IC.clock} />
+                    </svg>
+                  </span>
+                  <span className="dd-tfilter__label">Delay status</span>
+                  <span className="dd-tfilter__value">{pDelay}</span>
+                  <svg className="dd-tfilter__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+                {activeDropdown === "delay" && (
+                  <div className="dd-dd__menu" role="listbox" style={{ zIndex: 5, display: "block" }}>
+                    <div className="dd-dd__opts">
+                      {["Semua", "Terlambat", "Tepat waktu"].map((dl) => (
+                        <button
+                          key={dl}
+                          type="button"
+                          className={`dd-dd__opt ${pDelay === dl ? "dd-dd__opt--active" : ""}`}
+                          onClick={() => {
+                            setPDelay(dl);
+                            setPPage(1);
+                            setActiveDropdown(null);
+                          }}
+                        >
+                          <span className="dd-dd__opttext">{dl}</span>
+                          {pDelay === dl && (
+                            <svg className="dd-dd__tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="m5 13 4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleCsvExport}
-              className="px-3.5 h-10 bg-blue-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:bg-blue-700 active:scale-95 transition-all cursor-pointer"
-            >
-              <Icon name="download" className="w-3.5 h-3.5" />
-              Spreadsheet (CSV)
-            </button>
-            <span className="text-[11px] tabular-nums font-bold bg-neutral-50 px-3 h-10 border border-gray-100 rounded-xl flex items-center text-neutral-500">
-              {filteredProjects.length} filtered
-            </span>
-          </div>
-        </div>
+          {/* Table Rows & Columns */}
+          <div className="dd-table__scroll">
+            <div style={{ minWidth: 1000 }}>
+              <div
+                className="dd-table__head"
+                style={{
+                  gridTemplateColumns: "56px 116px minmax(0, 2.3fr) minmax(0, 1.5fr) 88px minmax(0, 1.2fr) 48px",
+                }}
+              >
+                <div className="dd-table__th">No</div>
+                <div className="dd-table__th">Ticket</div>
+                <div className="dd-table__th">Project</div>
+                <div className="dd-table__th">Milestones SLA</div>
+                <div className="dd-table__th" style={{ justifyContent: "flex-end" }}>
+                  Late
+                </div>
+                <div className="dd-table__th">Status</div>
+                <div className="dd-table__th" />
+              </div>
 
-        {/* Dropdowns filters row */}
-        <div className="grid grid-cols-1 min-[400px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {/* Year select */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block font-display">
-              Intake Year
-            </label>
-            <select
-              value={filterYear}
-              onChange={(e) =>
-                handleSelectFilter(setFilterYear, e.target.value)
-              }
-              className="w-full border border-gray-150 rounded-xl h-9 px-3 text-[11.5px] bg-white outline-none focus:border-blue-500"
-            >
-              {yearsList.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Type select */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block font-display">
-              Project Type
-            </label>
-            <select
-              value={filterType}
-              onChange={(e) =>
-                handleSelectFilter(setFilterType, e.target.value)
-              }
-              className="w-full border border-gray-150 rounded-xl h-9 px-3 text-[11.5px] bg-white outline-none focus:border-blue-500"
-            >
-              {typesList.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Division select */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block font-display">
-              Owner Division
-            </label>
-            <select
-              value={filterDiv}
-              onChange={(e) => handleSelectFilter(setFilterDiv, e.target.value)}
-              className="w-full border border-gray-150 rounded-xl h-9 px-3 text-[11.5px] bg-white outline-none focus:border-blue-500"
-            >
-              {divsList.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Pipeline group select */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block font-display">
-              Pipeline Category
-            </label>
-            <select
-              value={filterStatus}
-              onChange={(e) =>
-                handleSelectFilter(setFilterStatus, e.target.value)
-              }
-              className="w-full border border-gray-150 rounded-xl h-9 px-3 text-[11.5px] bg-white outline-none focus:border-blue-500"
-            >
-              {statusesList.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Dev SLA status select */}
-          <div className="space-y-1.5 select-none min-[400px]:col-span-2 sm:col-span-1">
-            <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block font-display">
-              DEV SLA State
-            </label>
-            <select
-              value={filterDevSla}
-              onChange={(e) =>
-                handleSelectFilter(setFilterDevSla, e.target.value)
-              }
-              className="w-full border border-gray-150 rounded-xl h-9 px-3 text-[11.5px] bg-white outline-none focus:border-blue-500"
-            >
-              <option value="All">All statuses</option>
-              <option value="Achieved">Achieved</option>
-              <option value="Not Achieved">Not Achieved</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Main projects spreadsheet table */}
-      <Card padding="p-0">
-        <div className="overflow-x-auto w-full">
-          <table className="min-w-245 w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-gray-50/75 border-b border-gray-100 text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display select-none h-11 shrink-0">
-                <th className="py-2 px-4 text-center w-12">No</th>
-                <th
-                  className="py-2 px-3 hover:bg-gray-100/30 cursor-pointer"
-                  onClick={() => triggerSort("created")}
-                  aria-sort={
-                    sortField === "created"
-                      ? sortAsc
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                >
-                  <HoverTip
-                    content="Sort by Created time (Ticket ID fallback)"
-                    className="flex items-center gap-1.5"
-                  >
-                    Ticket ID
-                    {sortField === "created" && (
-                      <Icon
-                        name={sortAsc ? "chevron-up" : "chevron-down"}
-                        className="w-3 h-3"
-                      />
-                    )}
-                  </HoverTip>
-                </th>
-                <th
-                  className="py-2 px-3 hover:bg-gray-100/30 cursor-pointer w-[45%] min-w-[240px]"
-                  onClick={() => triggerSort("name")}
-                >
-                  <div className="flex items-center gap-1.5">
-                    Project Detail
-                    {sortField === "name" && (
-                      <Icon
-                        name={sortAsc ? "chevron-up" : "chevron-down"}
-                        className="w-3 h-3"
-                      />
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="py-2 px-3 hover:bg-gray-100/30 cursor-pointer text-center"
-                  onClick={() => triggerSort("year")}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    Intake
-                    {sortField === "year" && (
-                      <Icon
-                        name={sortAsc ? "chevron-up" : "chevron-down"}
-                        className="w-3 h-3"
-                      />
-                    )}
-                  </div>
-                </th>
-                <th className="py-2 px-3 text-center">Milestones SLA Stages</th>
-                <th
-                  className="py-2 px-3 hover:bg-gray-100/30 cursor-pointer text-center"
-                  onClick={() => triggerSort("delay")}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    Late Sum
-                    {sortField === "delay" && (
-                      <Icon
-                        name={sortAsc ? "chevron-up" : "chevron-down"}
-                        className="w-3 h-3"
-                      />
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="py-2 px-3 hover:bg-gray-100/30 cursor-pointer text-center"
-                  onClick={() => triggerSort("reschedule")}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    Resched
-                    {sortField === "reschedule" && (
-                      <Icon
-                        name={sortAsc ? "chevron-up" : "chevron-down"}
-                        className="w-3 h-3"
-                      />
-                    )}
-                  </div>
-                </th>
-                <th className="py-2 px-4 text-right w-36">Pipeline Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {activePageProjects.map((p, idx) => {
-                const globalIndex = (safeCurrentPage - 1) * pageSize + idx + 1;
-                const totalDelay =
-                  (p._lateFSD || 0) +
-                  (p._lateDev || 0) +
-                  (p._lateSIT || 0) +
-                  (p._lateUAT || 0) +
-                  (p._lateLive || 0);
+              {pagedRows.map((r, idx) => {
+                const late = Number(r["(UAT) Late Days"] || r["(Dev) Late Days"] || r["(FSD) Late Days"] || 0);
+                const isLate = late > 0;
+                const tone = getTone(r["Last Status"]);
+                const rowNo = rangeStart + idx;
 
                 return (
-                  <tr
-                    key={p.notion_page_id || p["Ticket"] || idx}
-                    className="hover:bg-gray-50/15 transition-all text-gray-700"
+                  <div
+                    key={r.notion_page_id || `${r.Ticket || "proj"}-${rowNo}`}
+                    onClick={() =>
+                      setActiveModal({
+                        type: "project",
+                        title: r["Project Name"],
+                        subtitle: `${r.Ticket} · ${r["Type Project"]}`,
+                        project: r,
+                      })
+                    }
+                    className="dd-table__row dd-clickable"
+                    style={{
+                      gridTemplateColumns: "56px 116px minmax(0, 2.3fr) minmax(0, 1.5fr) 88px minmax(0, 1.2fr) 48px",
+                      cursor: "pointer",
+                    }}
                   >
-                    {/* No */}
-                    <td className="py-3.5 px-4 tabular-nums font-bold text-gray-400 text-center">
-                      {globalIndex}
-                    </td>
-
-                    {/* Ticket ID */}
-                    <td className="py-3.5 px-3 tabular-nums font-bold text-gray-800 text-[11px] whitespace-nowrap">
-                      {displayField(p["Ticket"], "—")}
-                    </td>
-
-                    {/* Project Detail */}
-                    <td className="py-3.5 px-3 min-w-[240px] whitespace-normal break-words">
-                      <p className="font-extrabold text-xs text-gray-900 leading-snug font-sans whitespace-normal break-words">
-                        {displayField(p["Project Name"])}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[10px] text-gray-400 font-sans">
-                        {displayField(p._typeGroup, "") !== "" && (
-                          <span className="font-semibold text-blue-600 bg-blue-50/40 px-1 py-0.5 rounded-sm uppercase tracking-wide">
-                            {p._typeGroup}
-                          </span>
-                        )}
-                        <span className="flex items-center gap-1">
-                          <Icon
-                            name="users"
-                            className="w-3 h-3 text-gray-300"
-                          />
-                          Owner:{" "}
-                          <strong className="text-gray-600">
-                            {displayField(p["Owner Name"])}
-                            {displayField(p["Owner Div"], "") === ""
-                              ? ""
-                              : ` (${displayField(p["Owner Div"])})`}
-                          </strong>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Icon
-                            name="clock"
-                            className="w-3 h-3 text-gray-300"
-                          />
-                          PIC:{" "}
-                          <strong className="text-gray-600">
-                            {displayField(p["PIC Name"], "—")}
-                          </strong>
-                        </span>
+                    <div className="dd-table__td">
+                      <span className="dd-table__idx">{rowNo}</span>
+                    </div>
+                    <div className="dd-table__td">
+                      <span style={{ font: "var(--text-cell-num)", color: "var(--text-secondary)" }}>
+                        {r.Ticket}
+                      </span>
+                    </div>
+                    <div className="dd-table__td">
+                      <div className="dd-table__primary">{r["Project Name"]}</div>
+                      <div className="dd-table__secondary">
+                        {r["Type Project"]} · {r["Owner Div"] || r["Owner Division"] || r["Owner Name"]}
                       </div>
-                    </td>
-
-                    {/* Intake Year */}
-                    <td className="py-3.5 px-3 text-center tabular-nums font-bold text-gray-600">
-                      {p._year}
-                    </td>
-
-                    {/* Stages indicators */}
-                    <td className="py-3.5 px-3">
-                      <div className="flex items-center justify-center gap-1">
-                        {renderStageBubble(
-                          "FSD",
-                          p["FSD SLA"],
-                          p["FSD SLA YEAR"],
-                        )}
-                        {renderStageBubble(
-                          "DEV",
-                          p["DEV SLA"],
-                          p["DEV SLA YEAR"],
-                        )}
-                        {renderStageBubble(
-                          "SIT",
-                          p["SIT SLA"],
-                          p["SIT SLA YEAR"],
-                        )}
-                        {renderStageBubble(
-                          "UAT",
-                          p["UAT SLA"],
-                          p["UAT SLA YEAR"],
-                        )}
-                        {renderStageBubble(
-                          "LIV",
-                          p["Live SLA"],
-                          p["LIVE SLA YEAR"],
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Late Sum */}
-                    <td className="py-3.5 px-3 text-center">
-                      {totalDelay > 0 ? (
-                        <span className="inline-block text-[11px] font-bold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded-md tabular-nums">
-                          +{totalDelay}d
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-gray-300 tabular-nums font-bold">
-                          —
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Reschedule */}
-                    <td className="py-3.5 px-3 text-center tabular-nums font-bold text-gray-700">
-                      {p["Reschedule UAT"] && p["Reschedule UAT"] > 0 ? (
-                        <span className="text-amber-600 bg-amber-50 border border-amber-100 text-[11px] px-1.5 py-0.5 rounded-md font-extrabold">
-                          {p["Reschedule UAT"]}×
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-[11px] font-bold">
-                          —
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Pipeline status */}
-                    <td className="py-3.5 px-4 text-right">
-                      <Pill
-                        label={p["Last Status"] || "—"}
-                        status={p["Last Status"]}
-                      />
-                    </td>
-                  </tr>
+                    </div>
+                    <div className="dd-table__td">{renderMilestoneChips(r)}</div>
+                    <div className="dd-table__td" style={{ textAlign: "right" }}>
+                      <span
+                        style={{
+                          font: "var(--text-cell-num)",
+                          color: isLate ? "var(--status-red-fg)" : "var(--text-placeholder)",
+                        }}
+                      >
+                        {isLate ? `+${late} hari` : "—"}
+                      </span>
+                    </div>
+                    <div className="dd-table__td">
+                      <span className={`dd-pill dd-pill--${tone}`}>
+                        <span className="dd-pill__dot" />
+                        {r["Last Status"]}
+                      </span>
+                    </div>
+                    <div className="dd-table__td--chev">
+                      <span className="dd-table__chev">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          aria-hidden="true"
+                        >
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </span>
+                    </div>
+                  </div>
                 );
               })}
-              {activePageProjects.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="py-16 text-center text-xs text-gray-400 font-sans"
+
+              {pagedRows.length === 0 && (
+                <div className="dd-empty">
+                  <div className="dd-empty__title">Tidak ada hasil</div>
+                  <div className="dd-empty__msg">
+                    Periksa ejaan atau longgarkan filter.
+                  </div>
+                  <button
+                    className="dd-btn dd-btn--secondary dd-btn--sm"
+                    type="button"
+                    onClick={() => {
+                      setQ("");
+                      setPYear("Semua");
+                      setPType("Semua");
+                      setPDiv("Semua");
+                      setPPipe("Semua");
+                      setPDelay("Semua");
+                    }}
+                    style={{ marginTop: 8 }}
                   >
-                    No projects match the active filters.
-                  </td>
-                </tr>
+                    Hapus pencarian
+                  </button>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination controls footer */}
-        <div className="px-4 py-3.5 sm:px-5 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3.5 select-none shrink-0 text-xs">
-          <div className="flex max-w-full flex-wrap items-center justify-center gap-2 sm:justify-start">
-            <span className="text-gray-400">Rows per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="border border-gray-200 bg-white rounded-lg px-2 py-0.5 outline-none font-semibold text-gray-600"
-            >
-              {[10, 20, 50, 100].map((sz) => (
-                <option key={sz} value={sz}>
-                  {sz}
-                </option>
-              ))}
-            </select>
-            <span className="w-full text-center text-gray-400 font-medium sm:ml-2 sm:w-auto sm:border-l sm:border-gray-200 sm:pl-3 sm:text-left">
-              Showing{" "}
-              {totalItems > 0 ? (safeCurrentPage - 1) * pageSize + 1 : 0}–
-              {Math.min(safeCurrentPage * pageSize, totalItems)} of {totalItems}{" "}
-              projects
-            </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, safeCurrentPage - 1))}
-              disabled={safeCurrentPage === 1}
-              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-white active:scale-90 transition-all font-bold cursor-pointer"
-            >
-              <Icon name="chevron-left" className="w-4 h-4" />
-            </button>
-            <span className="text-gray-400 tabular-nums font-medium text-[11.5px] px-2.5">
-              Page <strong className="text-gray-800">{safeCurrentPage}</strong>{" "}
-              of {totalPages}
+          {/* Table Footer with Page Size & Pager (Pict 3 & Pict 4) */}
+          <div className="dd-table__foot">
+            <span className="dd-table__count">
+              Menampilkan {rangeStart}–{rangeEnd} dari {totalCount} data
+              {projects.length === 0 && (
+                <> · <span style={{ color: "var(--text-placeholder)" }}>data contoh diulang untuk prototipe</span></>
+              )}
             </span>
-            <button
-              onClick={() =>
-                setCurrentPage(Math.min(totalPages, safeCurrentPage + 1))
-              }
-              disabled={safeCurrentPage === totalPages}
-              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-white active:scale-90 transition-all font-bold cursor-pointer"
-            >
-              <Icon name="chevron-right" className="w-4 h-4" />
-            </button>
+
+            {/* Page Size Selector */}
+            <div className="dd-dd" style={{ width: 215, marginLeft: "auto", position: "relative" }}>
+              {activeDropdown === "psize" && (
+                <div
+                  style={{ position: "fixed", inset: 0, zIndex: 1 }}
+                  onClick={() => setActiveDropdown(null)}
+                />
+              )}
+              <button
+                type="button"
+                className={`dd-tfilter ${activeDropdown === "psize" ? "dd-tfilter--open" : ""}`}
+                onClick={() => setActiveDropdown(activeDropdown === "psize" ? null : "psize")}
+                style={{ flex: 1, position: "relative", zIndex: 2 }}
+              >
+                <span className="dd-tfilter__icon" style={{ color: "var(--accent)" }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d={IC.layers} />
+                  </svg>
+                </span>
+                <span className="dd-tfilter__label">Baris per halaman</span>
+                <span className="dd-tfilter__value" style={{ color: "var(--accent)" }}>{pSize}</span>
+                <svg className="dd-tfilter__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d={activeDropdown === "psize" ? "m18 15-6-6-6 6" : "m6 9 6 6 6-6"} />
+                </svg>
+              </button>
+              {activeDropdown === "psize" && (
+                <div
+                  className="dd-dd__menu"
+                  role="listbox"
+                  style={{ zIndex: 10, top: "auto", bottom: "calc(100% + 6px)", display: "block" }}
+                >
+                  <div className="dd-dd__opts">
+                    {[10, 25, 50].map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        className={`dd-dd__opt ${pSize === sz ? "dd-dd__opt--active" : ""}`}
+                        onClick={() => {
+                          setPSize(sz);
+                          setPPage(1);
+                          setActiveDropdown(null);
+                        }}
+                      >
+                        <span className="dd-dd__opttext">{sz}</span>
+                        {pSize === sz && (
+                          <svg className="dd-dd__tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="m5 12 5 5 9-10" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Page Buttons (Pict 3: < 1 2 ... 5 >) */}
+            <div className="dd-pager" style={{ marginLeft: 0 }}>
+              <button
+                type="button"
+                className="dd-pager__btn"
+                disabled={currentPage <= 1}
+                onClick={() => setPPage((p) => Math.max(1, p - 1))}
+                aria-label="Halaman sebelumnya"
+                style={{ opacity: currentPage <= 1 ? 0.35 : 1, padding: "0 6px" }}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </button>
+
+              {totalPages <= 5 ? (
+                Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`dd-pager__btn ${n === currentPage ? "dd-pager__btn--active" : ""}`}
+                    onClick={() => setPPage(n)}
+                  >
+                    {n}
+                  </button>
+                ))
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className={`dd-pager__btn ${currentPage === 1 ? "dd-pager__btn--active" : ""}`}
+                    onClick={() => setPPage(1)}
+                  >
+                    1
+                  </button>
+                  {currentPage > 3 && <span style={{ padding: "0 3px", color: "var(--text-placeholder)" }}>…</span>}
+                  {currentPage > 2 && currentPage < totalPages && (
+                    <button
+                      type="button"
+                      className="dd-pager__btn dd-pager__btn--active"
+                      onClick={() => setPPage(currentPage)}
+                    >
+                      {currentPage}
+                    </button>
+                  )}
+                  {currentPage === 2 && (
+                    <button
+                      type="button"
+                      className="dd-pager__btn dd-pager__btn--active"
+                      onClick={() => setPPage(2)}
+                    >
+                      2
+                    </button>
+                  )}
+                  {currentPage < totalPages - 2 && <span style={{ padding: "0 3px", color: "var(--text-placeholder)" }}>…</span>}
+                  <button
+                    type="button"
+                    className={`dd-pager__btn ${currentPage === totalPages ? "dd-pager__btn--active" : ""}`}
+                    onClick={() => setPPage(totalPages)}
+                  >
+                    {totalPages}
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                className="dd-pager__btn"
+                disabled={currentPage >= totalPages}
+                onClick={() => setPPage((p) => Math.min(totalPages, p + 1))}
+                aria-label="Halaman berikutnya"
+                style={{ opacity: currentPage >= totalPages ? 0.35 : 1, padding: "0 6px" }}
+              >
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </div>
-      </Card>
-    </div>
+        </section>
+      </div>
+
+      {/* Shared Modals */}
+      <PicMonitoringModals
+        modal={activeModal}
+        onClose={() => setActiveModal(null)}
+        onSelectProject={(project) =>
+          setActiveModal({
+            type: "project",
+            title: project["Project Name"],
+            subtitle: `${project.Ticket} · ${project["Type Project"]}`,
+            project,
+          })
+        }
+      />
+    </>
   );
 }

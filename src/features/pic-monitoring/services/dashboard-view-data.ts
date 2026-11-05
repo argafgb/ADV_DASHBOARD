@@ -1,7 +1,16 @@
+function getNewerIso(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null;
+  if (!b) return a ?? null;
+  const timeA = Date.parse(a);
+  const timeB = Date.parse(b);
+  if (Number.isNaN(timeA)) return b;
+  if (Number.isNaN(timeB)) return a;
+  return timeA >= timeB ? a : b;
+}
 import "server-only";
 
 import { computeDashboardMetrics, sanitizeProjects } from "../utils/parser";
-import { getDashboardProjects } from "./dashboard-database";
+import { getDashboardProjects, getLatestDatabaseTimestamp } from "./dashboard-database";
 import { getLatestProjectSyncTimestamp } from "./project-data";
 import { formatSyncTimestamp } from "../utils/utils";
 import {
@@ -58,7 +67,9 @@ export async function getDashboardViewData(
     operationalProjects,
     masterProjects,
     businessDataset: computeDashboardMetrics(operationalProjects, selectedYear),
-    lastUpdated: formatSyncTimestamp(getLatestProjectSyncTimestamp(projects)),
+    lastUpdated: formatSyncTimestamp(
+      getNewerIso(getLatestProjectSyncTimestamp(projects), await getLatestDatabaseTimestamp())
+    ),
     startYear: selectedYear,
     endYear: selectedYear,
   };

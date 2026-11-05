@@ -173,14 +173,28 @@ export function getLatestProjectSyncTimestamp(
   let latestTimestamp: string | null = null;
 
   for (const project of projects) {
-    const value = project.last_synced;
-    if (typeof value !== "string") continue;
+    const candidates = [
+      project.last_synced,
+      project.last_edited_time,
+      project["Last edited time"],
+      project.created_time,
+      project["Created time"],
+    ];
 
-    const time = Date.parse(value);
-    if (Number.isNaN(time) || time <= latestTime) continue;
-
-    latestTime = time;
-    latestTimestamp = value;
+    for (const val of candidates) {
+      if (!val) continue;
+      const strVal =
+        typeof val === "string"
+          ? val
+          : val instanceof Date
+            ? val.toISOString()
+            : String(val);
+      const time = Date.parse(strVal);
+      if (!Number.isNaN(time) && time > latestTime) {
+        latestTime = time;
+        latestTimestamp = strVal;
+      }
+    }
   }
 
   return latestTimestamp;

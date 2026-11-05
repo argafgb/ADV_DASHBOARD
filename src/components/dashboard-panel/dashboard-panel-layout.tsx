@@ -29,7 +29,7 @@ export default function DashboardPanelLayout({
         className={cn(
           "relative min-h-screen min-w-0 flex flex-col overflow-x-clip ease-in-out bg-[#F5F6FA] dark:bg-zinc-900",
           hydrated && "transition-[margin-left] duration-300",
-          !settings.disabled && (!isSidebarOpen ? "lg:ml-22.5" : "lg:ml-64"),
+          !settings.disabled && (!isSidebarOpen ? "ml-[72px]" : "ml-[248px]"),
         )}
       >
         <Navbar onOpenDashModal={onOpenDashModal} />

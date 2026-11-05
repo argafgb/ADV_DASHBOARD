@@ -8,12 +8,6 @@ import { getMenuList } from "@/lib/menu-list";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CollapseMenuButton } from "@/components/dashboard-panel/collapse-menu-button";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from "@/components/ui/tooltip";
 
 import type { AuthRole } from "@/types/auth.types";
 
@@ -64,8 +58,15 @@ export function Menu({
 
   return (
     <ScrollArea className="[&>div>div[style]]:block! flex-1 w-full">
-      <nav className="mt-4 h-full w-full">
-        <ul className="flex flex-col items-start space-y-1 w-full px-2">
+      <nav className="mt-3 h-full w-full">
+        <ul
+          className={cn(
+            "flex flex-col w-full",
+            isOpen === false
+              ? "items-center px-0 gap-y-2"
+              : "items-start px-2 gap-y-1.5",
+          )}
+        >
           {menus.map(({ href, label, icon: Icon, active, submenus }, index) => {
             const isRootCauseMenu = label === "Ticketing & Root Cause";
             const isActive = !!(
@@ -76,60 +77,60 @@ export function Menu({
             );
 
             return (
-              <li className="w-full" key={`${href}-${index}`}>
+              <li
+                className={cn(
+                  "w-full",
+                  isOpen === false && "flex items-center justify-center",
+                )}
+                key={`${href}-${index}`}
+              >
                 {!submenus || submenus.length === 0 ? (
-                  <TooltipProvider disableHoverableContent>
-                    <Tooltip delayDuration={100}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={isActive ? "secondary" : "ghost"}
-                          className={cn(
-                            "mb-1 h-auto min-h-10 py-2 w-full",
-                            isOpen === false
-                              ? "justify-center px-0"
-                              : "justify-start px-4",
-                            isActive
-                              ? "font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20"
-                              : "text-zinc-755 dark:text-zinc-400",
-                          )}
-                          asChild
-                        >
-                          <Link
-                            href={dashboardHref(href, searchParams)}
-                            aria-current={isActive ? "page" : undefined}
-                            onClick={onNavigate}
-                            className="flex items-center w-full"
-                          >
-                            <span
-                              className={cn(
-                                isOpen === false ? "" : "mr-4",
-                                isActive
-                                  ? "text-blue-600 dark:text-blue-400"
-                                  : "text-zinc-400 dark:text-zinc-550",
-                              )}
-                            >
-                              <Icon size={18} />
-                            </span>
-
-                            <p
-                              className={cn(
-                                isRootCauseMenu ? "whitespace-nowrap text-sm transition-all text-left" : "max-w-50 truncate text-sm transition-all text-left",
-                                isOpen === false
-                                  ? "hidden opacity-0"
-                                  : "block translate-x-0 opacity-100",
-                              )}
-                            >
-                              {label}
-                            </p>
-                          </Link>
-                        </Button>
-                      </TooltipTrigger>
-
-                      {isOpen === false && (
-                        <TooltipContent side="right">{label}</TooltipContent>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "cursor-pointer m-0 border-0 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 active:outline-none active:ring-0 focus:border-0 active:border-0 transition-colors",
+                      isOpen === false
+                        ? "h-11 w-11 min-w-11 max-w-11 min-h-11 max-h-11 p-0 rounded-[10px] flex items-center justify-center shadow-none border-0 shrink-0"
+                        : "h-11 min-h-[44px] py-0 px-3 w-full justify-start rounded-[10px]",
+                      isActive
+                        ? "font-semibold text-[#2563EB] dark:text-blue-400 bg-[#EFF4FE] dark:bg-blue-950/40 hover:bg-[#EFF4FE] dark:hover:bg-blue-950/50 active:bg-[#EFF4FE] focus:bg-[#EFF4FE]"
+                        : "text-slate-600 dark:text-zinc-400 hover:bg-[#F5F7FB] dark:hover:bg-zinc-800/80 hover:text-slate-900 active:bg-[#F5F7FB]",
+                    )}
+                    asChild
+                  >
+                    <Link
+                      href={dashboardHref(href, searchParams)}
+                      aria-current={isActive ? "page" : undefined}
+                      onClick={onNavigate}
+                      className={cn(
+                        "flex items-center",
+                        isOpen === false ? "justify-center" : "w-full",
                       )}
-                    </Tooltip>
-                  </TooltipProvider>
+                    >
+                      <span
+                        className={cn(
+                          isOpen === false ? "" : "mr-3",
+                          isActive
+                            ? "text-[#2563EB] dark:text-blue-400"
+                            : "text-slate-400 dark:text-zinc-400 group-hover:text-slate-600",
+                        )}
+                      >
+                        <Icon size={20} strokeWidth={1.8} />
+                      </span>
+
+                      <p
+                        className={cn(
+                          isRootCauseMenu ? "whitespace-nowrap text-[13px] transition-all text-left" : "max-w-50 truncate text-[13px] transition-all text-left",
+                          isActive && "font-semibold",
+                          isOpen === false
+                            ? "hidden opacity-0"
+                            : "block translate-x-0 opacity-100",
+                        )}
+                      >
+                        {label}
+                      </p>
+                    </Link>
+                  </Button>
                 ) : (
                   <CollapseMenuButton
                     icon={Icon}

@@ -18,7 +18,7 @@ export const MONTH_OPTIONS = [
   { value: 5, shortLabel: "Mei", label: "Mei" },
   { value: 6, shortLabel: "Jun", label: "Juni" },
   { value: 7, shortLabel: "Jul", label: "Juli" },
-  { value: 8, shortLabel: "Ags", label: "Agustus" },
+  { value: 8, shortLabel: "Agu", label: "Agustus" },
   { value: 9, shortLabel: "Sep", label: "September" },
   { value: 10, shortLabel: "Okt", label: "Oktober" },
   { value: 11, shortLabel: "Nov", label: "November" },
@@ -93,13 +93,13 @@ export function parseMonthRange(month: string): MonthRange {
 }
 
 export function formatMonthSelection(month: string): string {
-  if (month === "ALL") return "All Months";
+  if (month === "ALL") return "Semua";
 
   const { start, end } = parseMonthRange(month);
-  const startLabel = MONTH_OPTIONS[start]?.label;
-  const endLabel = MONTH_OPTIONS[end]?.label;
-  if (!startLabel || !endLabel) return month;
-  return start === end ? startLabel : `${startLabel} - ${endLabel}`;
+  const startShort = MONTH_OPTIONS[start]?.shortLabel;
+  const endShort = MONTH_OPTIONS[end]?.shortLabel;
+  if (!startShort || !endShort) return month;
+  return start === end ? startShort : `${startShort}–${endShort}`;
 }
 
 /** Rentang bulan kalender 1–12 (inklusif) dari pilihan chip Bulan. */
@@ -128,9 +128,14 @@ export function formatPeriodLabel(
 ): string {
   if (window === null) return String(year);
 
-  const startLabel = MONTH_OPTIONS[window.startMonth - 1].shortLabel;
-  if (window.startMonth === window.endMonth) return `${year} · ${startLabel}`;
-  return `${year} · ${startLabel}–${MONTH_OPTIONS[window.endMonth - 1].shortLabel}`;
+  const startMonthObj = MONTH_OPTIONS[window.startMonth - 1];
+  const endMonthObj = MONTH_OPTIONS[window.endMonth - 1];
+  if (!startMonthObj || !endMonthObj) return String(year);
+
+  if (window.startMonth === window.endMonth) {
+    return `${startMonthObj.label} ${year}`;
+  }
+  return `${startMonthObj.label} – ${endMonthObj.label} ${year}`;
 }
 
 /**

@@ -14,12 +14,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-} from "@/components/ui/tooltip";
-import {
   DropdownMenu,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -149,44 +143,35 @@ export function CollapseMenuButton({
     </Collapsible>
   ) : (
     <DropdownMenu>
-      <TooltipProvider disableHoverableContent>
-        <Tooltip delayDuration={100}>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant={isSubmenuActive ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full h-10 mb-1",
-                  isOpen === false
-                    ? "justify-center px-0"
-                    : "justify-start px-4",
-                )}
-              >
-                <div
-                  className={cn(
-                    "items-center flex",
-                    isOpen === false
-                      ? "justify-center"
-                      : "w-full justify-between",
-                  )}
-                >
-                  <div className="flex items-center">
-                    <span className={cn(isOpen === false ? "" : "mr-4")}>
-                      <Icon size={18} />
-                    </span>
-                    {isOpen !== false && (
-                      <p className="max-w-50 truncate">{label}</p>
-                    )}
-                  </div>
-                </div>
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="right" align="start" alignOffset={2}>
-            {label}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant={isSubmenuActive ? "secondary" : "ghost"}
+          className={cn(
+            "cursor-pointer m-0 border-0 outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 active:outline-none active:ring-0 transition-colors",
+            isOpen === false
+              ? "h-11 w-11 min-w-11 max-w-11 min-h-11 max-h-11 p-0 mx-auto rounded-[10px] flex items-center justify-center shrink-0 shadow-none border-0"
+              : "h-11 min-h-[44px] justify-start px-4 rounded-[10px] w-full",
+          )}
+        >
+          <div
+            className={cn(
+              "items-center flex",
+              isOpen === false
+                ? "justify-center"
+                : "w-full justify-between",
+            )}
+          >
+            <div className="flex items-center">
+              <span className={cn(isOpen === false ? "" : "mr-4")}>
+                <Icon size={18} />
+              </span>
+              {isOpen !== false && (
+                <p className="max-w-50 truncate">{label}</p>
+              )}
+            </div>
+          </div>
+        </Button>
+      </DropdownMenuTrigger>
       <DropdownMenuContent side="right" sideOffset={8} align="start">
         <DropdownMenuLabel className="max-w-47.5 truncate">
           {label}
